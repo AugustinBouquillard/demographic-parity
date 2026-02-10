@@ -14,12 +14,15 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
     1. Solves the OT problem to find fair targets (barycenters) for training data.
     2. Learns the 'fairness shift' (correction) using k-NN on the (eta, delta) space.
     3. Predicts by applying this learned shift to the old regressor's output.
+
+    s = 1, majority, mu +  
+    s = 2, minority, mu - 
     """
     def __init__(self, base_regressor=None, base_classifier=None, n_neighbors=5):
-        self.base_regressor = base_regressor if base_regressor else LinearRegression()
+        self.base_regressor = base_regressor if base_regressor else LinearRegression() # fit_intercept is True by defaut
         self.base_classifier = base_classifier if base_classifier else LogisticRegression(solver='liblinear')
         
-        # We use k-NN to regress the "shift" (correction)
+        
         self.knn_correction_ = KNeighborsRegressor(n_neighbors=n_neighbors)
         self.scaler_ = StandardScaler()
         
@@ -33,79 +36,79 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         y = np.array(y)
         s = np.array(s)
 
-        # --- 1. Fit Nuisance Models ---
+        # --- 1. Fit Bayesian Models ---
         self.eta_model_ = clone(self.base_regressor).fit(X, y)
         eta_train = self.eta_model_.predict(X)
 
         self.p_s1_ = np.mean(s == 1)
-        self.p_s0_ = np.mean(s == 0)
+        self.p_s2_ = np.mean(s == 2)
         self.delta_model_ = clone(self.base_classifier).fit(X, s)
         ps_pred = self.delta_model_.predict_proba(X)[:, 1]
         
         # Clip to avoid division by zero
         ps_pred = np.clip(ps_pred, 1e-6, 1 - 1e-6)
-        delta_vals = (ps_pred / self.p_s1_) - ((1 - ps_pred) / self.p_s0_)
+        delta_vals = (ps_pred / self.p_s1_) - ((1 - ps_pred) / self.p_s2_)
 
         # --- 2. Split Data by Delta ---
-        # Group +: Delta > 0 (Advantaged)
-        # Group -: Delta < 0 (Disadvantaged)
+        # Group +: Delta > 0 (Advantaged, s = 1)
+        # Group -: Delta < 0 (Disadvantaged, s = 2)
         eps = 1e-9
         idx_plus = np.where(delta_vals > eps)[0]
         idx_minus = np.where(delta_vals < -eps)[0]
         
-        h_plus = eta_train[idx_plus]
-        d_plus = np.abs(delta_vals[idx_plus])
-        h_minus = eta_train[idx_minus]
-        d_minus = np.abs(delta_vals[idx_minus])
+        h1 = eta_train[idx_plus]
+        d1 = np.abs(delta_vals[idx_plus])
+        h2 = eta_train[idx_minus]
+        d2 = np.abs(delta_vals[idx_minus])
         
-        n_plus = len(h_plus)
-        n_minus = len(h_minus)
+        n1 = len(h1)
+        n2 = len(h2)
 
         # --- 3. Compute Cost Matrix for OT ---
         # Formula: C(x1, x2) = (h1 - h2)^2 / (|d1| + |d2|)
-        # Shape: (n_plus, n_minus)
-        numer = (h_plus[:, None] - h_minus[None, :]) ** 2
-        denom = (d_plus[:, None] + d_minus[None, :])
-        M = numer / denom
+        # Shape: (n1, n2) by eq(13)
+        numer = (h1[:, None] - h2[None, :]) ** 2
+        denom = (d1[:, None] + d2[None, :])
+        M = numer / denom 
 
         # --- 4. Solve Optimal Transport (Earth Mover's Distance) ---
-        a = np.ones(n_plus) / n_plus
-        b = np.ones(n_minus) / n_minus
+        a = np.ones(n1) / n1
+        b = np.ones(n2) / n2
         
-        # Returns the transport matrix gamma (shape: n_plus x n_minus)
+        # Returns the transport matrix gamma (shape: n1 x n2)
         gamma = ot.emd(a, b, M)
 
         # --- 5. Compute Fair Barycenters ---
         # For every pair (i, j), the optimal fair target is:
         # y* = (h_i/d_i + h_j/d_j) / (1/d_i + 1/d_j)
         
-        inv_d_plus = 1.0 / d_plus
-        inv_d_minus = 1.0 / d_minus
+        inv_d1 = 1.0 / d1
+        inv_d2 = 1.0 / d2
         
-        # Compute pairwise optimal targets
-        num_matrix = (h_plus * inv_d_plus)[:, None] + (h_minus * inv_d_minus)[None, :]
-        den_matrix = inv_d_plus[:, None] + inv_d_minus[None, :]
+        # Compute pairwise optimal targets eq(15)
+        num_matrix = (h1 * inv_d1)[:, None] + (h2 * inv_d2)[None, :]
+        den_matrix = inv_d1[:, None] + inv_d2[None, :]
         Y_opt_pairs = num_matrix / den_matrix
         
         # Aggregate targets for training points
         # For point i in Plus: Expected target = sum_j (gamma_ij / a_i) * Y_opt_ij
-        y_fair_plus = np.sum(gamma * Y_opt_pairs, axis=1) * n_plus
+        y_fair_plus = np.sum(gamma * Y_opt_pairs, axis=1) * n1
         
         # For point j in Minus: Expected target = sum_i (gamma_ij / b_j) * Y_opt_ij
-        y_fair_minus = np.sum(gamma * Y_opt_pairs, axis=0) * n_minus
+        y_fair_minus = np.sum(gamma * Y_opt_pairs, axis=0) * n2
         
         # Construct full training arrays
         # We train on the sufficient statistics (eta, delta)
         X_train_features = np.concatenate([
-            np.column_stack((h_plus, delta_vals[idx_plus])),
-            np.column_stack((h_minus, delta_vals[idx_minus]))
+            np.column_stack((h1, delta_vals[idx_plus])),
+            np.column_stack((h2, delta_vals[idx_minus]))
         ])
         
         # We learn the SHIFT: Correction = y_fair - y_original
         # This keeps the "old regressor" as the base.
         y_fair_shifts = np.concatenate([
-            y_fair_plus - h_plus,
-            y_fair_minus - h_minus
+            y_fair_plus - h1,
+            y_fair_minus - h2
         ])
 
         # --- 6. Fit k-NN on the Shifts ---
