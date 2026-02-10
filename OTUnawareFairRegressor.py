@@ -24,12 +24,20 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         
         
         self.knn_correction_ = KNeighborsRegressor(n_neighbors=n_neighbors)
+        self.linear_mapping_plus = ot.da.LinearGWTransport()
+        self.linear_mapping_minus = ot.da.LinearGWTransport() 
         self.scaler_ = StandardScaler()
         
         self.eta_model_ = None
         self.delta_model_ = None
         self.p_s1_ = None
-        self.p_s0_ = None
+        self.p_s2_ = None
+        
+        
+        self.y_fair_plus = None
+        self.y_fair_minus = None
+        self.h_plus = None
+        self.h_minus = None 
 
     def fit(self, X, y, s):
         X = np.array(X)
@@ -74,7 +82,7 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         # --- 4. Solve Optimal Transport (Earth Mover's Distance) ---
         a = np.ones(n1) / n1
         b = np.ones(n2) / n2
-        
+ 
         # Returns the transport matrix gamma (shape: n1 x n2)
         gamma = ot.emd(a, b, M)
 
@@ -103,37 +111,56 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
             np.column_stack((h1, delta_vals[idx_plus])),
             np.column_stack((h2, delta_vals[idx_minus]))
         ])
-        
-        # We learn the SHIFT: Correction = y_fair - y_original
-        # This keeps the "old regressor" as the base.
-        y_fair_shifts = np.concatenate([
-            y_fair_plus - h1,
-            y_fair_minus - h2
-        ])
 
-        # --- 6. Fit k-NN on the Shifts ---
+        h = np.concatenate([h1, h2])
+        
+        y_fair = np.concatenate([
+            y_fair_plus ,
+            y_fair_minus
+        ])
+        self.y_fair_plus = y_fair_plus.reshape(-1,1)
+        self.y_fair_minus = y_fair_minus.reshape(-1,1)
+        self.h_plus = h1.reshape(-1,1)
+        self.h_minus = h2.reshape(-1,1)
+
+        # --- Fit k-NN on the Shifts ---
         # Scale features for k-NN
         X_train_scaled = self.scaler_.fit_transform(X_train_features)
-        self.knn_correction_.fit(X_train_scaled, y_fair_shifts)
+        self.knn_correction_.fit(X_train_scaled, y_fair)
         
+
+        # -- Fit a linear mapping ---
+        
+        self.linear_mapping_plus.fit(Xs=self.h_plus, Xt=self.y_fair_plus)
+        self.linear_mapping_minus.fit(Xs=self.h_minus, Xt= self.y_fair_minus)
         return self
 
-    def predict(self, X):
+    def predict(self, X, prediction = "linear"):
         X = np.array(X)
-        
+
         # 1. Get Old Regressor Prediction
         eta_new = self.eta_model_.predict(X)
         
         # 2. Get Delta
         ps = self.delta_model_.predict_proba(X)[:, 1]
-        delta_new = (ps / self.p_s1_) - ((1 - ps) / self.p_s0_)
-        
-        # 3. Predict Correction via k-NN
+        delta_new = (ps / self.p_s1_) - ((1 - ps) / self.p_s2_)
+
+        # 3. Predict via k-NN
         features_new = np.column_stack((eta_new, delta_new))
         features_scaled = self.scaler_.transform(features_new)
         
-        pred_shifts = self.knn_correction_.predict(features_scaled)
+        pred_knn = self.knn_correction_.predict(features_scaled)
         
-        # 4. Apply Correction
-        return eta_new + pred_shifts
+        pred_linear = np.zeros(len(X))
+        for idx, delta in enumerate(delta_new):
+            if delta >=0:
+                pred_linear[idx] = self.linear_mapping_plus.transform(self.eta_model_.predict(X[idx].reshape(-1, 1)))[0][0]
+            else: 
+   
+                pred_linear[idx] = self.linear_mapping_minus.transform(self.eta_model_.predict(X[idx].reshape(-1, 1)))[0][0]
+
+        if prediction == "linear":
+            return pred_linear
+        else : 
+            return  pred_knn
 
