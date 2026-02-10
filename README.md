@@ -23,6 +23,11 @@ https://archive.ics.uci.edu/dataset/2/adult
 
 https://www.kaggle.com/datasets/danofer/compass 
 
+Slides (beamer) :
+
+https://www.overleaf.com/project/698b63cb383f80060ab40e24
+
+
 
 
 
