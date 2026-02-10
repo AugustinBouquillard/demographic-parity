@@ -6,5 +6,14 @@ https://github.com/lucaoneto/NIPS2020_Fairness
 Unawareness framework, regression (and classification) achieving demographic parity (Divol V., Gaucher S.):
 https://hal.science/hal-04684789v1/document 
 
+Regression under demographic parity constraints via
+unlabeled post-processing
+https://proceedings.neurips.cc/paper_files/paper/2024/file/d5c3ecf397fff63419bb5f5f2d8afe33-Paper-Conference.pdf
+
+jeux de données :
+https://archive.ics.uci.edu/dataset/2/adult 
+https://www.kaggle.com/datasets/danofer/compass 
+
+
 
 
