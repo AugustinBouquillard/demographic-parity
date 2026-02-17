@@ -22,7 +22,7 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         self.base_regressor = base_regressor if base_regressor else LinearRegression() # fit_intercept is True by defaut
         self.base_classifier = base_classifier if base_classifier else LogisticRegression(solver='liblinear')
         
-        
+        d
         self.knn_ = KNeighborsRegressor(n_neighbors=n_neighbors)
         self.linear_mapping_plus = ot.da.LinearGWTransport()
         self.linear_mapping_minus = ot.da.LinearGWTransport() 
@@ -37,7 +37,7 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         self.y_fair_minus = None
         self.h_plus = None
         self.h_minus = None 
-
+        self.delta_predict = None
     def fit(self, X, y, s):
         X = np.array(X)
         y = np.array(y)
@@ -143,7 +143,7 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         # Get Delta
         ps = self.delta_model_.predict_proba(X)[:, 1]
         delta_new = (ps / self.p_s1_) - ((1 - ps) / self.p_s2_)
-        
+        self.delta_predict = delta_new
        
         if prediction == "linear":
             pred_linear = np.zeros(len(X))
