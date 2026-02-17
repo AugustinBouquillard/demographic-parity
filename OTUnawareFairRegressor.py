@@ -36,7 +36,8 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         self.y_fair_plus = None
         self.y_fair_minus = None
         self.h_plus = None
-        self.h_minus = None 
+        self.h_minus = None
+        self.delta_predict = None 
 
     def fit(self, X, y, s):
         X = np.array(X)
@@ -143,7 +144,7 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         # Get Delta
         ps = self.delta_model_.predict_proba(X)[:, 1]
         delta_new = (ps / self.p_s1_) - ((1 - ps) / self.p_s2_)
-        
+        self.delta_predict = delta_new
        
         if prediction == "linear":
             pred_linear = np.zeros(len(X))
