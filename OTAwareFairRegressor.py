@@ -1,86 +1,112 @@
 import numpy as np
 
-class WassersteinFairRegressor:
+import numpy as np
+from sklearn.base import clone
+from sklearn.linear_model import LogisticRegression
+
+#trouver les quantiles interpoler cf. fonction interp en python
+
+class OTAwareFairRegressor:
     """
     Optimal Fair Regressor using Wasserstein Barycenters.
-    Transforms an unfair base estimator into a fair one satisfying Demographic Parity.
+    Trains a base estimator and transforms its outputs to satisfy Demographic Parity.
     """
-    def __init__(self, base_estimator, sigma=1e-5):
+    def __init__(self, base_estimator_model, proxy_estimator=None, sigma=1e-5):
         """
-        base_estimator: A trained model with a `.predict(X, S)` method.
+        base_estimator_model: An unfitted machine learning model (e.g., RandomForestRegressor()).
+        proxy_estimator: also known as DELTA. An unfitted proxy estimator for estimating group-specific conditional expectations.
         sigma: Jitter parameter for uniform noise to break ties.
         """
-        self.base_estimator = base_estimator
+        # Clone the model to ensure we are starting with a fresh, unfitted estimator
+        self.base_estimator = clone(base_estimator_model)
         self.sigma = sigma
         self.p_hat = {}
         self.ar0 = {}
         self.ar1 = {}
         self.groups = []
+        if proxy_estimator is None:
+            self.proxy_estimator = LogisticRegression()
+        else:
+            self.proxy_estimator = proxy_estimator
 
-    def fit_transform_unlabeled(self, X_unlabeled, S_unlabeled):
+    import numpy as np
+
+    def fit(self, X_train, y_train, S_train, X_unlabeled=None, S_unlabeled=None):
         """
-        Precomputes the empirical CDFs and quantile functions using unlabeled data.
+        Trains the base estimator and calibrates the Wasserstein fair transformation.
         """
-        self.groups = np.unique(S_unlabeled)
-        n_total = len(S_unlabeled)
+        self.proxy_estimator.fit(X_train, S_train)
+
+        # 1. Train the base estimator \hat{f} on labeled data 
+        X_S_train_combined = np.column_stack((X_train, S_train))
+        self.base_estimator.fit(X_S_train_combined, y_train)
+
+        # 2. Setup unlabeled data \mathcal{U} for calibration 
+        # Fallback to training data if no distinct unlabeled pool is provided
+        X_calib = X_train if X_unlabeled is None else X_unlabeled
+        S_calib = S_train if S_unlabeled is None else S_unlabeled
+
+        self.groups, counts = np.unique(S_calib, return_counts=True)
+        n_total = len(S_calib)
         
+        # Estimate empirical frequencies \hat{p}_s 
+        self.p_hat = {s: count / n_total for s, count in zip(self.groups, counts)}
+        
+        # 3. Perform the group-wise calibration (Algorithm 1) 
         for s in self.groups:
-            # 1. Get unlabeled data for group s
-            mask = (S_unlabeled == s)
-            X_s = X_unlabeled[mask]
+            # Isolate unlabeled data \mathcal{U}^s for group s 
+            X_s = X_calib[S_calib == s]
             
-            # 2. Empirical frequencies
-            self.p_hat[s] = len(X_s) / n_total
+            # Split data into two equal parts: \mathcal{U}_0^s and \mathcal{U}_1^s 
+            half = len(X_s) // 2
+            X_s_0, X_s_1 = X_s[:half], X_s[half:]
             
-            # 3. Split data in two equal parts as dictated by the algorithm
-            n_s = len(X_s)
-            half = n_s // 2
-            X_s_0 = X_s[:half]
-            X_s_1 = X_s[half:]
+            # Re-attach the sensitive attribute 's' so the base model can predict
+            XS_0 = np.column_stack((X_s_0, np.full(len(X_s_0), s)))
+            XS_1 = np.column_stack((X_s_1, np.full(len(X_s_1), s)))
             
-            S_s_0 = np.full(len(X_s_0), s)
-            S_s_1 = np.full(len(X_s_1), s)
-            
-            # 4. Generate base predictions and apply uniform jitter
-            pred_0 = self.base_estimator.predict(X_s_0, S_s_0)
-            pred_1 = self.base_estimator.predict(X_s_1, S_s_1)
+            # Predict and apply uniform jitter U([-\sigma, \sigma]) 
+            pred_0 = self.base_estimator.predict(XS_0)
+            pred_1 = self.base_estimator.predict(XS_1)
             
             ar0_s = pred_0 + np.random.uniform(-self.sigma, self.sigma, size=len(pred_0))
             ar1_s = pred_1 + np.random.uniform(-self.sigma, self.sigma, size=len(pred_1))
             
-            # 5. Sort arrays for fast evaluation of empirical CDF and Quantiles
+            # Sort arrays (ar_0^{s'} and ar_1^{s'}) for fast evaluation 
             self.ar0[s] = np.sort(ar0_s)
             self.ar1[s] = np.sort(ar1_s)
+            
+        return self
 
     def _predict_single(self, x, s):
         """
-        Computes the fair prediction g_hat(x, s) for a single instance.
+        Computes the fair prediction g_hat(x, s) for a single instance[cite: 131].
         """
-        # Get base prediction and add jitter
-        x_array = np.array([x])
-        s_array = np.array([s])
-        f_val = self.base_estimator.predict(x_array, s_array)[0]
+        # Combine x and s for the base estimator
+        x_s_combined = np.concatenate((x, [s])).reshape(1, -1)
+        f_val = self.base_estimator.predict(x_s_combined)[0]
+        
+        # Add jitter [cite: 131]
         f_val += np.random.uniform(-self.sigma, self.sigma)
         
-        # Evaluate empirical CDF: position of f_val in ar1_s
+        # Evaluate empirical CDF
         ar1_s = self.ar1[s]
         k_s = np.searchsorted(ar1_s, f_val)
         
         g_hat = 0.0
-        # Calculate the barycenter mapping 
+        # Calculate the barycenter mapping [cite: 131]
         for s_prime in self.groups:
             ar0_sp = self.ar0[s_prime]
             n_sp = len(ar0_sp)
             
-            # Find matching quantile index in ar0_s'
             idx = int((n_sp * k_s) / len(ar1_s))
-            idx = min(idx, n_sp - 1) # Handle edge case
+            idx = min(idx, n_sp - 1)
             
             g_hat += self.p_hat[s_prime] * ar0_sp[idx]
             
         return g_hat
         
-    def predict(self, X, S=None, delta=None):
+    def predict(self, X, S=None):
         """
         Generates fair predictions.
         
@@ -89,10 +115,11 @@ class WassersteinFairRegressor:
         delta: Matrix of shape (n_samples, n_groups) with estimated probabilities 
                of S (for the Unawareness context).
         """
-        if S is None and delta is None:
-            raise ValueError("Must provide either true 'S' or estimated 'delta'.")
-            
         predictions = []
+
+        if S is None :
+            delta=self.proxy_estimator.predict_proba(X)
+         
         for i in range(len(X)):
             x = X[i]
             
