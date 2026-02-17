@@ -22,7 +22,7 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         self.base_regressor = base_regressor if base_regressor else LinearRegression() # fit_intercept is True by defaut
         self.base_classifier = base_classifier if base_classifier else LogisticRegression(solver='liblinear')
         
-        d
+        
         self.knn_ = KNeighborsRegressor(n_neighbors=n_neighbors)
         self.linear_mapping_plus = ot.da.LinearGWTransport()
         self.linear_mapping_minus = ot.da.LinearGWTransport() 
