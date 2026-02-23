@@ -20,7 +20,7 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
     s = 1, majority, mu +  
     s = 2, minority, mu - 
     """
-    def __init__(self, base_regressor=None, base_classifier=None, n_neighbors=5):
+    def __init__(self, base_regressor=None, base_classifier=None, n_neighbors=5,kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma=0.1)):
         self.base_regressor = base_regressor if base_regressor else LinearRegression() # fit_intercept is True by defaut
         self.base_classifier = base_classifier if base_classifier else LogisticRegression(solver='liblinear')
         
@@ -30,7 +30,7 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         self.linear_mapping_minus = ot.da.LinearGWTransport() 
         self.scaler_ = StandardScaler()
 
-        self.krr_ = KernelRidge(kernel='rbf', alpha=0.1, gamma=0.1)
+        self.krr_ = kernel_krr
 
         self.eta_model_ = None
         self.delta_model_ = None

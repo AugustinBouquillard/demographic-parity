@@ -519,6 +519,7 @@ ot_reg_gp = OTUnawareFairRegressor(base_regressor= gp_reg)
 ot_reg_gp.fit(X_train, Y_train, S_train)
 y_gp_fair = ot_reg_gp.predict(X_test, prediction= "krr")
 
+y_gp_fair_knn = ot_reg_gp.predict(X_test, prediction= "knn")
 
 def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
     """
@@ -722,6 +723,13 @@ plot_ks_comparison(
     group_names=['Majority (S=1)', 'Minority (S=2)'], # Optional custom labels
     save_path="./results/generic_data_unaware_KS_gp.png"
 )
+plot_ks_comparison(
+    y_unfair=y_gp, 
+    y_fair=y_gp_fair_knn, 
+    s_attr=S_test, 
+    group_names=['Majority (S=1)', 'Minority (S=2)'], # Optional custom labels
+    save_path="./results/generic_data_unaware_KS_knn.png"
+)
 
 # %%
 
@@ -820,6 +828,14 @@ def plot_fairness_shift(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42
 plot_fairness_shift(
     y_unfair = y_gp, 
     y_fair = y_gp_fair, 
+    s_attr = S_test, 
+    delta = ot_reg_gp.delta_predict, 
+    n_samples = 50 
+)
+
+plot_fairness_shift(
+    y_unfair = y_gp, 
+    y_fair = y_gp_fair_knn, 
     s_attr = S_test, 
     delta = ot_reg_gp.delta_predict, 
     n_samples = 50 
