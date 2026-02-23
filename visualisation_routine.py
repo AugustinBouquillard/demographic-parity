@@ -49,7 +49,7 @@ alpha_0 = 2
 alpha_1 = 1 
 x_scale = 1 
 noise_scale = 0.3 
-X, Y, S = generate_linear_data(n = 600, alpha_0 = alpha_0, alpha_1 = alpha_1, x_scale = x_scale, noise_scale = noise_scale)
+X, Y, S = generate_linear_data(n = n, alpha_0 = alpha_0, alpha_1 = alpha_1, x_scale = x_scale, noise_scale = noise_scale)
 
 # train-test split
 X_train, X_test, Y_train, Y_test, S_train, S_test = train_test_split(X, Y, S, train_size = 0.7)
