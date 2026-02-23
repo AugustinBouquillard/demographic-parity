@@ -44,12 +44,12 @@ def generate_linear_data(n , alpha_0, alpha_1, p = 0.5, x_scale = 1, noise_scale
 # %%
 
 # visualisation of generated dataset 
-n = 600 
+n = 1000 
 alpha_0 = 2
 alpha_1 = 1 
 x_scale = 1 
 noise_scale = 0.3 
-X, Y, S = generate_linear_data(n = 600, alpha_0 = alpha_0, alpha_1 = alpha_1, x_scale = x_scale, noise_scale = noise_scale)
+X, Y, S = generate_linear_data(n = n, alpha_0 = alpha_0, alpha_1 = alpha_1, x_scale = x_scale, noise_scale = noise_scale)
 
 # train-test split
 X_train, X_test, Y_train, Y_test, S_train, S_test = train_test_split(X, Y, S, train_size = 0.7)
@@ -432,6 +432,13 @@ plot_fairness_shift(
     n_samples = 50 
 )
 # %%
+
+
+
+
+
+
+
 # Gaussian process regression 
 # regression for the whole dataset/majority group/minority group
 from sklearn.gaussian_process import GaussianProcessRegressor
@@ -446,15 +453,17 @@ Y_train_maj = Y_train[S_train == 1]
 X_test_maj = X_test[S_test == 1]
 Y_test_maj = Y_test[S_test == 1]
 
-gp_reg_maj = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9).fit(X_train_maj, Y_train_maj)
-y_gp_maj = gp_reg_maj.predict(X_test_maj)
+gp_reg_maj = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9, alpha=noise_scale**2).fit(X_train_maj, Y_train_maj)
+X_test_maj_sorted = np.sort(X_test_maj, axis = 0)
+y_gp_maj_sorted = gp_reg_maj.predict(X_test_maj_sorted)
 
 X_train_min = X_train[S_train == 2]
 Y_train_min = Y_train[S_train == 2]
 X_test_min = X_test[S_test == 2]
 Y_test_min = Y_test[S_test == 2]
-gp_reg_min = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9).fit(X_train_min, Y_train_min)
-y_gp_min = gp_reg_min.predict(X_test_min)
+gp_reg_min = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9, alpha=noise_scale**2).fit(X_train_min, Y_train_min)
+X_test_min_sorted = np.sort(X_test_min, axis =0 )
+y_gp_min_sorted = gp_reg_min.predict(X_test_min_sorted)
 
 
 # visualisation
@@ -479,18 +488,19 @@ x_range_max = X.max() + 0.2
 X_plot = np.linspace(x_range_min, x_range_max, 1000).reshape(-1, 1)
 
 # Line for S=1
-plt.plot(X_plot, gp_reg_maj.predict(X_plot), color=color_maj, 
+
+plt.plot(X_test_maj_sorted, y_gp_maj_sorted, color=color_maj, 
          linewidth=3, label='Regressor S=1')
 
 # Line for S=2
-plt.plot(X_plot, gp_reg_min.predict(X_plot), color=color_min, 
+plt.plot(X_test_min_sorted, y_gp_min_sorted, color=color_min, 
          linewidth=3, label='Regressor S=2')
 
 # Line for Unfair (Combined)
 plt.plot(X_plot, gp_reg.predict(X_plot), color=color_all, linestyle='--', 
          linewidth=2, label='Unfair Regressor (Combined)')
 
-plt.title(" Bias in Generated Data", fontsize=14)
+plt.title(" Bias in Generated Data (Gaussian process regressor)", fontsize=14)
 plt.xlabel("Feature X")
 plt.ylabel("Target Y")
 
@@ -503,9 +513,9 @@ plt.show()
 # %%
 
 # Fair regresseur
-ot_reg = OTUnawareFairRegressor()
-ot_reg.fit(X_train, Y_train, S_train)
-y_fair = ot_reg.predict(X_test, prediction= "knn")
+ot_reg_gp = OTUnawareFairRegressor(base_regressor= gp_reg)
+ot_reg_gp.fit(X_train, Y_train, S_train)
+y_gp_fair = ot_reg_gp.predict(X_test, prediction= "krr")
 
 
 def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
@@ -606,10 +616,10 @@ def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
 
 plot_fairness_correction(
     X=X_test, 
-    y_unfair=y_std, 
-    y_fair=y_fair, 
+    y_unfair=y_gp, 
+    y_fair=y_gp_fair, 
     s_attr=S_test, 
-    save_path="./results/fairness_correction_scatter.png"
+    save_path="./results/fairness_correction_scatter_gp.png"
 )
 
 
@@ -704,11 +714,11 @@ def plot_ks_comparison(y_unfair, y_fair, s_attr, group_names=None, save_path=Non
 # --- Example Usage ---
 # You can now call it cleanly:
 plot_ks_comparison(
-    y_unfair=y_std, 
-    y_fair=y_fair, 
+    y_unfair=y_gp, 
+    y_fair=y_gp_fair, 
     s_attr=S_test, 
     group_names=['Majority (S=1)', 'Minority (S=2)'], # Optional custom labels
-    save_path="./results/generic_data_unaware_KS.png"
+    save_path="./results/generic_data_unaware_KS_gp.png"
 )
 
 # %%
@@ -806,10 +816,10 @@ def plot_fairness_shift(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42
 
 
 plot_fairness_shift(
-    y_unfair = y_std, 
-    y_fair = y_fair, 
+    y_unfair = y_gp, 
+    y_fair = y_gp_fair, 
     s_attr = S_test, 
-    delta = ot_reg.delta_predict, 
+    delta = ot_reg_gp.delta_predict, 
     n_samples = 50 
 )
 # %%

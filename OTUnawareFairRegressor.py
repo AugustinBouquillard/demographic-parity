@@ -6,6 +6,8 @@ from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import StandardScaler
 from scipy.stats import ks_2samp
+from sklearn.kernel_ridge import KernelRidge
+from sklearn.pipeline import make_pipeline
 
 class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
     """
@@ -27,7 +29,9 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         self.linear_mapping_plus = ot.da.LinearGWTransport()
         self.linear_mapping_minus = ot.da.LinearGWTransport() 
         self.scaler_ = StandardScaler()
-        
+
+        self.krr_ = KernelRidge(kernel='rbf', alpha=0.1, gamma=0.1)
+
         self.eta_model_ = None
         self.delta_model_ = None
         self.p_s1_ = None
@@ -127,6 +131,8 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         X_train_scaled = self.scaler_.fit_transform(X_train_features)
         self.knn_.fit(X_train_scaled, y_fair)
         
+        # Fit krr
+        self.krr_.fit(X_train_scaled, y_fair)
 
         # Fit a linear mapping
         self.linear_mapping_plus.fit(Xs=self.h_plus, Xt=self.y_fair_plus)
@@ -134,7 +140,7 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
 
         return self
 
-    def predict(self, X, prediction = "linear"):
+    def predict(self, X, prediction = "knn"):
         X = np.array(X)
 
         # Get Old Regressor Prediction
@@ -155,6 +161,13 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
                     pred_linear[idx] = self.linear_mapping_minus.transform(self.eta_model_.predict(X[idx].reshape(-1, 1)))[0][0]
 
             return pred_linear
+            
+        elif prediction == "krr":
+            features_new = np.column_stack((eta_new, delta_new))
+            features_scaled = self.scaler_.transform(features_new)
+            
+            pred_krr = self.krr_.predict(features_scaled)
+            return pred_krr
         
         else : 
             # Predict via k-NN
@@ -163,4 +176,5 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
             
             pred_knn = self.knn_.predict(features_scaled)
             return  pred_knn
+        
 
