@@ -33,11 +33,11 @@ def generate_linear_data(n , alpha_0, alpha_1, p = 0.5, x_scale = 1, noise_scale
     np.random.seed(seed)
     S = np.random.binomial(1, p, n)+1 # Binary sensitive attributes
 
-    X = np.random.normal(0, x_scale, n) + alpha_0 * S
+    X = np.random.normal(0, x_scale, n) - alpha_0 * S
     X = X.reshape(-1, 1)
 
     # Y depends on X and S 
-    Y = alpha_1*S + 0.5 * X.flatten() + np.random.normal(0, noise_scale, n)
+    Y = -alpha_1*S + 0.5 * X.flatten() + np.random.normal(0, noise_scale, n)
    
     return X, Y, S
 
@@ -429,3 +429,113 @@ plot_fairness_shift(
     n_samples = 50 
 )
 # %%
+# %% 
+
+def plot_fairness_shift(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42):
+    """
+    Visualizes the shift from unfair to fair predictions using a transport map style,
+    alongside the initial conditional distributions and the final barycenter.
+    """
+    
+    # Standardize Inputs (Keep full arrays for accurate histograms)
+    y_u_full = np.array(y_unfair).flatten()
+    y_f_full = np.array(y_fair).flatten()
+    s_full = np.array(s_attr).flatten()
+    d_full = np.array(delta).flatten()
+    
+    unique_groups = np.unique(s_full)
+    
+    # Sampling for the scatter plot only (Optional)
+    if n_samples is not None and n_samples < len(y_u_full):
+        np.random.seed(seed)
+        indices = np.random.choice(len(y_u_full), n_samples, replace=False)
+        y_u, y_f, s, d = y_u_full[indices], y_f_full[indices], s_full[indices], d_full[indices]
+    else:
+        y_u, y_f, s, d = y_u_full, y_f_full, s_full, d_full
+
+    # Setup Colors (Blue & Orange)
+    cmap = plt.get_cmap('tab10')
+    c_blue = cmap(0)  
+    c_orange = cmap(1)
+    group_colors = {unique_groups[0]: c_blue, unique_groups[1]: c_orange}
+    point_colors = [group_colors[val] for val in s]
+
+    # --- Setup Figure and GridSpec ---
+    fig = plt.figure(figsize=(10, 8))
+    # Create two rows: top for histograms (height 1), bottom for scatter (height 2.5)
+    gs = fig.add_gridspec(2, 1, height_ratios=[1, 2.5], hspace=0.05)
+    
+    ax_hist = fig.add_subplot(gs[0])
+    ax_scatter = fig.add_subplot(gs[1], sharex=ax_hist)
+
+    # ==========================================
+    # 1. TOP PANEL: Distributions (Histograms)
+    # ==========================================
+    group_0_mask = s_full == unique_groups[0]
+    group_1_mask = s_full == unique_groups[1]
+    
+    # Initial conditional distributions (Unfair)
+    ax_hist.hist(y_u_full[group_0_mask], bins=40, density=True, alpha=0.4, 
+                 color=c_blue, label=f'Initial | S={unique_groups[0]}')
+    ax_hist.hist(y_u_full[group_1_mask], bins=40, density=True, alpha=0.4, 
+                 color=c_orange, label=f'Initial | S={unique_groups[1]}')
+    
+    # Barycenter distribution (Fair - target)
+    ax_hist.hist(y_f_full, bins=40, density=True, histtype='step', 
+                 linewidth=2, color='black', linestyle='--', label='Barycenter (Fair)')
+    
+    ax_hist.set_ylabel("Density")
+    ax_hist.legend(loc='upper right')
+    ax_hist.tick_params(labelbottom=False) # Hide x-ticks to blend with the plot below
+    ax_hist.grid(axis='x', alpha=0.3)
+
+    # ==========================================
+    # 2. BOTTOM PANEL: Transport Map (Scatter)
+    # ==========================================
+    start_points = np.column_stack((y_u, d))
+    end_points = np.column_stack((y_f, np.zeros_like(d)))
+    
+    segments = np.stack((start_points, end_points), axis=1)
+    lc = LineCollection(segments, colors='gray', alpha=0.3, linewidths=0.8, zorder=0)
+    ax_scatter.add_collection(lc)
+    
+    # Unfair (Start) - Stars
+    ax_scatter.scatter(y_u, d, c=point_colors, s=60, marker='*', 
+                       alpha=0.8, edgecolors='white', linewidth=0.5, zorder=1)
+    
+    # Fair (End) - Circles (Projected onto y=0)
+    ax_scatter.scatter(y_f, np.zeros_like(d), c=point_colors, s=50, marker='o', 
+                       alpha=0.9, edgecolors='white', linewidth=0.5, zorder=2)
+
+    # Custom Legend for the bottom plot
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', label=f'Group {unique_groups[0]}',
+               markerfacecolor=c_blue, markersize=10),
+        Line2D([0], [0], marker='o', color='w', label=f'Group {unique_groups[1]}',
+               markerfacecolor=c_orange, markersize=10),
+        Line2D([0], [0], color='white', label=' '), 
+        Line2D([0], [0], marker='*', color='w', label='Unfair Prediction',
+               markerfacecolor='gray', markersize=12),
+        Line2D([0], [0], marker='o', color='w', label='Fair Prediction',
+               markerfacecolor='gray', markersize=10),
+    ]
+
+    ax_scatter.axhline(0, color='black', linestyle='-', linewidth=1, alpha=0.5)
+    ax_scatter.set_xlabel("Predicted Value ($y$)")
+    ax_scatter.set_ylabel(r"$\Delta(x)$ (Correction Cost)")
+    ax_scatter.legend(handles=legend_elements, loc='upper right', frameon=True)
+    ax_scatter.grid(alpha=0.2)
+    
+    fig.suptitle(f"Fairness Correction Transport Map (Sampled {len(y_u)} points)", y=0.95)
+    
+    plt.tight_layout()
+    plt.savefig("./results/generic_data_unaware_correction_line_with_hist.png", dpi=300) 
+    plt.show()
+
+plot_fairness_shift(
+    y_unfair = y_std, 
+    y_fair = y_fair, 
+    s_attr = S_test, 
+    delta = ot_reg.delta_predict, 
+    n_samples = 100 
+)

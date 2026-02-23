@@ -51,8 +51,8 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         self.eta_model_ = clone(self.base_regressor).fit(X, y)
         eta_train = self.eta_model_.predict(X)
 
-        self.p_s1_ = np.clip(np.mean(s == 1), min = 1e-6, max =  1 - 1e-6)
-        self.p_s2_ = np.clip(np.mean(s == 2), min = 1e-6, max = 1-1e-6)
+        self.p_s1_ = np.clip(np.mean(s == 1), a_min=1e-6, a_max=1-1e-6)
+        self.p_s2_ = np.clip(np.mean(s == 2), a_min=1e-6, a_max=1-1e-6)
         self.delta_model_ = clone(self.base_classifier).fit(X, s)
         ps_pred = self.delta_model_.predict_proba(X)[:, 1]
         
