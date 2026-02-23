@@ -16,28 +16,29 @@ from matplotlib.collections import LineCollection
 from matplotlib.lines import Line2D
 # %%
 # Generate Data (X depends on S)
-def generate_linear_data(n , alpha_0, alpha_1, p = 0.5, x_scale = 1, noise_scale = 1, seed = 42):
+def generate_linear_data(n , alpha_0, alpha_1, p = 0.3, x_scale = 1, noise_scale = 1, seed = 42):
     """
     Generate 1D linear data.  
-    (X = normal(0, x_scale) + alpha_0 * S, Y = X + alpha_1 * S + normal(0, noise_scale, n) )
+    (X = normal(0, x_scale) - alpha_0 * S, 
+    Y = X - alpha_1 * S + normal(0, noise_scale, n) )
     S = 1 for majority
     S = 2 for minority
 
     :param n: size of dataset
-    :param alpha_0: X = normal(0, x_scale) + alpha_0*S 
-    :param alpha_1: Y = X + alpha_1*S 
+    :param alpha_0: X = normal(0, x_scale) - alpha_0*S 
+    :param alpha_1: Y = X - alpha_1*S 
     :param p: probability for S = 2 (parameter in random.binomial)
-    :param x_scale: X = normal(0, x_scale) + alpha_0*S 
+    :param x_scale: X = normal(0, x_scale) - alpha_0*S 
     :param seed: random seed
     """
     np.random.seed(seed)
     S = np.random.binomial(1, p, n)+1 # Binary sensitive attributes
 
-    X = np.random.normal(0, x_scale, n) + alpha_0 * S
+    X = np.random.normal(0, x_scale, n) - alpha_0 * S
     X = X.reshape(-1, 1)
 
     # Y depends on X and S 
-    Y = alpha_1*S + 0.5 * X.flatten() + np.random.normal(0, noise_scale, n)
+    Y = - alpha_1*S + 0.5 * X.flatten() + np.random.normal(0, noise_scale, n)
    
     return X, Y, S
 
@@ -49,7 +50,8 @@ alpha_0 = 2
 alpha_1 = 1 
 x_scale = 1 
 noise_scale = 0.3 
-X, Y, S = generate_linear_data(n = n, alpha_0 = alpha_0, alpha_1 = alpha_1, x_scale = x_scale, noise_scale = noise_scale)
+p = 0.5
+X, Y, S = generate_linear_data(n = n, alpha_0 = alpha_0, alpha_1 = alpha_1, x_scale = x_scale, noise_scale = noise_scale, p = p)
 
 # train-test split
 X_train, X_test, Y_train, Y_test, S_train, S_test = train_test_split(X, Y, S, train_size = 0.7)
@@ -109,7 +111,7 @@ plt.plot(X_plot, std_reg_min.predict(X_plot), color=color_min,
 plt.plot(X_plot, std_reg.predict(X_plot), color=color_all, linestyle='--', 
          linewidth=2, label='Unfair Regressor (Combined)')
 
-plt.title(" Bias in Generated Data", fontsize=14)
+plt.title(" Bias in Generated Data (linear regressor)", fontsize=14)
 plt.xlabel("Feature X")
 plt.ylabel("Target Y")
 
