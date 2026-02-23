@@ -537,5 +537,7 @@ plot_fairness_shift(
     y_fair = y_fair, 
     s_attr = S_test, 
     delta = ot_reg.delta_predict, 
-    n_samples = 100 
+    n_samples = 100
 )
+
+# %%
