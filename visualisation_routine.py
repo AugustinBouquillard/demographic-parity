@@ -16,7 +16,7 @@ from matplotlib.collections import LineCollection
 from matplotlib.lines import Line2D
 # %%
 # Generate Data (X depends on S)
-def generate_linear_data(n , alpha_0, alpha_1, p = 0.5, x_scale = 1, noise_scale = 1, seed = 42):
+def generate_linear_data(n , alpha_0=2, alpha_1=1, p = 0.5, x_scale = 1, noise_scale = 1, seed = 42):
     """
     Generate 1D linear data.  
     (X = normal(0, x_scale) + alpha_0 * S, Y = X + alpha_1 * S + normal(0, noise_scale, n) )
@@ -44,7 +44,7 @@ def generate_linear_data(n , alpha_0, alpha_1, p = 0.5, x_scale = 1, noise_scale
 # %%
 
 # visualisation of generated dataset 
-n = 600 
+n = 1000 
 alpha_0 = 2
 alpha_1 = 1 
 x_scale = 1 
@@ -79,14 +79,27 @@ color_maj = cmap(0)  # Color for S=1 (Orange)
 color_min = cmap(1)  # Color for S=2 (Green)
 color_all = 'black'  # Color for the unfair regressor
 
-plt.figure(figsize=(10, 6))
+plt.figure(figsize=(6, 3.5))
 
 # Plot Data Points (Split by group for the legend)
 plt.scatter(X[S == 1], Y[S == 1], color=color_maj, alpha=0.5, s=30, 
-            label='Data S=1 (Majority)')
+            label='Data S=1 (Advantaged)')
 
 plt.scatter(X[S == 2], Y[S == 2], color=color_min, alpha=0.5, s=30, 
-            label='Data S=2 (Minority)')
+            label='Data S=2 (Disadvantaged)')
+plt.xlabel("Feature X")
+plt.ylabel("Target Y")
+plt.legend(frameon=True, loc='best')
+plt.title("Generated toy example")
+plt.show()
+#%%
+plt.figure(figsize=(6, 3.5))
+# Plot Data Points (Split by group for the legend)
+plt.scatter(X[S == 1], Y[S == 1], color=color_maj, alpha=0.5, s=30, 
+            label='Data S=1 (Advantaged)')
+
+plt.scatter(X[S == 2], Y[S == 2], color=color_min, alpha=0.5, s=30, 
+            label='Data S=2 (Disadvantaged)')
 
 # Plot Regression Lines 
 # Create X range for smooth lines
@@ -106,13 +119,11 @@ plt.plot(X_plot, std_reg_min.predict(X_plot), color=color_min,
 plt.plot(X_plot, std_reg.predict(X_plot), color=color_all, linestyle='--', 
          linewidth=2, label='Unfair Regressor (Combined)')
 
-plt.title(" Bias in Generated Data", fontsize=14)
+plt.title(" Bias in generated data - linear regression", fontsize=14)
 plt.xlabel("Feature X")
 plt.ylabel("Target Y")
 
-# Legend
 plt.legend(frameon=True, loc='best')
-
 plt.tight_layout()
 plt.show()
 

@@ -7,13 +7,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
 
-class OTUnawareFairRegressor_Taturyan():
-    pass
-
 class OTUnawareFairRegressor_Sinkhorn(BaseEstimator, RegressorMixin):
     """
     Scalable Unaware Fair Regressor using Entropic Optimal Transport.
-    
     Improvements over base implementation:
     1. Uses Sinkhorn algorithm (O(N^2)) instead of exact EMD (O(N^3)).
     2. Uses Gradient Boosting for the correction map (better interpolation than k-NN).
@@ -335,3 +331,8 @@ class OTUnawareFairRegressor_Perrot(BaseEstimator, RegressorMixin):
             final_pred[mask_plus] = mapped_X[:, 0]
             
         return final_pred
+    
+
+    class OTUnawareFairRegressor_Taturyan():
+    #cf the cloned code of Taturyan et al, in ./unaware-fair-reg/FairReg.py
+        pass
