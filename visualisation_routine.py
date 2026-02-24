@@ -14,6 +14,10 @@ from OTUnawareFairRegressor import OTUnawareFairRegressor
 from data_extraction_script import read_adult_dataset
 from matplotlib.collections import LineCollection
 from matplotlib.lines import Line2D
+
+
+
+
 # %%
 # Generate Data (X depends on S)
 def generate_linear_data(n , alpha_0=2, alpha_1=1, p = 0.5, x_scale = 1, noise_scale = 1, seed = 42):
@@ -41,8 +45,11 @@ def generate_linear_data(n , alpha_0=2, alpha_1=1, p = 0.5, x_scale = 1, noise_s
    
     return X, Y, S
 
-# %%
 
+
+
+
+# %%
 # visualisation of generated dataset 
 n = 1000 
 alpha_0 = 2
@@ -79,27 +86,31 @@ color_maj = cmap(0)  # Color for S=1 (Orange)
 color_min = cmap(1)  # Color for S=2 (Green)
 color_all = 'black'  # Color for the unfair regressor
 
-plt.figure(figsize=(6, 3.5))
+plt.figure(figsize=(6, 5))
 
 # Plot Data Points (Split by group for the legend)
 plt.scatter(X[S == 1], Y[S == 1], color=color_maj, alpha=0.5, s=30, 
-            label='Data S=1 (Advantaged)')
+            label='S=1')
 
 plt.scatter(X[S == 2], Y[S == 2], color=color_min, alpha=0.5, s=30, 
-            label='Data S=2 (Disadvantaged)')
+            label='S=2')
 plt.xlabel("Feature X")
 plt.ylabel("Target Y")
 plt.legend(frameon=True, loc='best')
 plt.title("Generated toy example")
 plt.show()
+
+
+
+
 #%%
-plt.figure(figsize=(6, 3.5))
+plt.figure(figsize=(5, 4))
 # Plot Data Points (Split by group for the legend)
 plt.scatter(X[S == 1], Y[S == 1], color=color_maj, alpha=0.5, s=30, 
-            label='Data S=1 (Advantaged)')
+            label='S=1')
 
 plt.scatter(X[S == 2], Y[S == 2], color=color_min, alpha=0.5, s=30, 
-            label='Data S=2 (Disadvantaged)')
+            label='S=2')
 
 # Plot Regression Lines 
 # Create X range for smooth lines
@@ -117,18 +128,94 @@ plt.plot(X_plot, std_reg_min.predict(X_plot), color=color_min,
 
 # Line for Unfair (Combined)
 plt.plot(X_plot, std_reg.predict(X_plot), color=color_all, linestyle='--', 
-         linewidth=2, label='Unfair Regressor (Combined)')
+         linewidth=2, label='Unfair "bayes" regressor')
 
-plt.title(" Bias in generated data - linear regression", fontsize=14)
+plt.title("linear regression", fontsize=14)
 plt.xlabel("Feature X")
 plt.ylabel("Target Y")
 
 plt.legend(frameon=True, loc='best')
-plt.tight_layout()
+#plt.tight_layout()
 plt.show()
 
-# %%
 
+
+
+
+# %%
+plt.figure(figsize=(5, 4))
+# Gaussian process regression 
+# regression for the whole dataset/majority group/minority group
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF
+
+kernel = 2 * RBF(length_scale=3.0, length_scale_bounds=(1e-2, 1e2))
+gp_reg = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9, alpha=noise_scale**2).fit(X_train, Y_train)
+y_gp = gp_reg.predict(X_test)
+
+X_train_maj = X_train[S_train == 1]
+Y_train_maj = Y_train[S_train == 1]
+X_test_maj = X_test[S_test == 1]
+Y_test_maj = Y_test[S_test == 1]
+
+gp_reg_maj = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9, alpha=noise_scale**2).fit(X_train_maj, Y_train_maj)
+X_test_maj_sorted = np.sort(X_test_maj, axis = 0)
+y_gp_maj_sorted = gp_reg_maj.predict(X_test_maj_sorted)
+
+X_train_min = X_train[S_train == 2]
+Y_train_min = Y_train[S_train == 2]
+X_test_min = X_test[S_test == 2]
+Y_test_min = Y_test[S_test == 2]
+gp_reg_min = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9, alpha=noise_scale**2).fit(X_train_min, Y_train_min)
+X_test_min_sorted = np.sort(X_test_min, axis =0 )
+y_gp_min_sorted = gp_reg_min.predict(X_test_min_sorted)
+
+
+# visualisation
+cmap = plt.get_cmap('tab10')
+color_maj = cmap(0)  # Color for S=1 (Orange)
+color_min = cmap(1)  # Color for S=2 (Green)
+color_all = 'black'  # Color for the unfair regressor
+
+# Plot Data Points (Split by group for the legend)
+plt.scatter(X[S == 1], Y[S == 1], color=color_maj, alpha=0.5, s=30, 
+            label='S=1')
+
+plt.scatter(X[S == 2], Y[S == 2], color=color_min, alpha=0.5, s=30, 
+            label='S=2')
+
+# Plot Regression Lines 
+# Create X range for smooth lines
+x_range_min = X.min() - 0.2
+x_range_max = X.max() + 0.2
+X_plot = np.linspace(x_range_min, x_range_max, 1000).reshape(-1, 1)
+
+# Line for S=1
+
+plt.plot(X_test_maj_sorted, y_gp_maj_sorted, color=color_maj, 
+         linewidth=3, label='Regressor S=1')
+
+# Line for S=2
+plt.plot(X_test_min_sorted, y_gp_min_sorted, color=color_min, 
+         linewidth=3, label='Regressor S=2')
+
+# Line for Unfair (Combined)
+plt.plot(X_plot, gp_reg.predict(X_plot), color=color_all, linestyle='--', 
+         linewidth=2, label='Unfair "bayes" regressor')
+
+plt.title("gaussian process regression")
+plt.xlabel("Feature X")
+plt.ylabel("Target Y")
+
+# Legend
+plt.legend(frameon=True, loc='best')
+
+#plt.tight_layout()
+plt.show()
+
+
+
+#%%
 # Fair regresseur
 ot_reg = OTUnawareFairRegressor()
 ot_reg.fit(X_train, Y_train, S_train)
@@ -240,8 +327,8 @@ plot_fairness_correction(
 )
 
 
-# %%
 
+# %%
 # Calculate KS Distance
 def plot_ks_comparison(y_unfair, y_fair, s_attr, group_names=None, save_path=None):
     """
@@ -338,9 +425,9 @@ plot_ks_comparison(
     save_path="./results/generic_data_unaware_KS.png"
 )
 
+
+
 # %%
-
-
 def plot_fairness_shift(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42):
     """
     Visualizes the shift from unfair to fair predictions using a transport map style.
@@ -439,9 +526,11 @@ plot_fairness_shift(
     delta = ot_reg.delta_predict, 
     n_samples = 50 
 )
-# %%
-# %% 
 
+
+
+
+# %% 
 def plot_fairness_shift(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42):
     """
     Visualizes the shift from unfair to fair predictions using a transport map style,
@@ -550,5 +639,7 @@ plot_fairness_shift(
     delta = ot_reg.delta_predict, 
     n_samples = 100
 )
+
+
 
 # %%
