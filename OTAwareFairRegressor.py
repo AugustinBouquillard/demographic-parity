@@ -57,7 +57,7 @@ class OTAwareFairRegressor:
             # Isolate unlabeled data \mathcal{U}^s for group s 
             X_s = X_calib[S_calib == s]
             
-            # Split data into two equal parts: \mathcal{U}_0^s and \mathcal{U}_1^s 
+            # Split data into two equal parts
             half = len(X_s) // 2
             X_s_0, X_s_1 = X_s[:half], X_s[half:]
             
@@ -71,8 +71,6 @@ class OTAwareFairRegressor:
             
             ar0_s = pred_0 + np.random.uniform(-self.sigma, self.sigma, size=len(pred_0))
             ar1_s = pred_1 + np.random.uniform(-self.sigma, self.sigma, size=len(pred_1))
-            
-            # Sort arrays (ar_0^{s'} and ar_1^{s'}) for fast evaluation 
             self.ar0[s] = np.sort(ar0_s)
             self.ar1[s] = np.sort(ar1_s)
             

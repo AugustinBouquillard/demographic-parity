@@ -6,7 +6,11 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
-class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
+
+class OTUnawareFairRegressor_Taturyan():
+    pass
+
+class OTUnawareFairRegressor_Sinkhorn(BaseEstimator, RegressorMixin):
     """
     Scalable Unaware Fair Regressor using Entropic Optimal Transport.
     
