@@ -1,21 +1,19 @@
 import numpy as np
-
-import numpy as np
 from sklearn.base import clone
 from sklearn.linear_model import LogisticRegression
 
-#trouver les quantiles interpoler cf. fonction interp en python
+#trouver les quantiles, interpoler cf. fonction interp en python
 
 class OTAwareFairRegressor:
     """
     Optimal Fair Regressor using Wasserstein Barycenters.
-    Trains a base estimator and transforms its outputs to satisfy Demographic Parity.
+    Trains a base estimator and transforms its outputs to satisfy Demographic Parity following the method from Chzhen et al. "Fair Regression with Wasserstein Barycenters".
     """
     def __init__(self, base_estimator_model, proxy_estimator=None, sigma=1e-5):
         """
-        base_estimator_model: An unfitted machine learning model (e.g., RandomForestRegressor()).
+        base_estimator_model: an unfitted machine learning model (e.g., RandomForestRegressor()).
         proxy_estimator: also known as DELTA. An unfitted proxy estimator for estimating group-specific conditional expectations.
-        sigma: Jitter parameter for uniform noise to break ties.
+        sigma: jitter parameter for uniform noise to break ties.
         """
         # Clone the model to ensure we are starting with a fresh, unfitted estimator
         self.base_estimator = clone(base_estimator_model)
@@ -28,8 +26,6 @@ class OTAwareFairRegressor:
             self.proxy_estimator = LogisticRegression()
         else:
             self.proxy_estimator = proxy_estimator
-
-    import numpy as np
 
     def fit(self, X_train, y_train, S_train, X_unlabeled=None, S_unlabeled=None):
         """
@@ -52,20 +48,20 @@ class OTAwareFairRegressor:
         # Estimate empirical frequencies \hat{p}_s 
         self.p_hat = {s: count / n_total for s, count in zip(self.groups, counts)}
         
-        # 3. Perform the group-wise calibration (Algorithm 1) 
+        # 3. Performing the group-wise calibration 
         for s in self.groups:
-            # Isolate unlabeled data \mathcal{U}^s for group s 
+            # Isolating unlabeled data for group s 
             X_s = X_calib[S_calib == s]
             
-            # Split data into two equal parts
+            # Splitting data into two equal parts
             half = len(X_s) // 2
             X_s_0, X_s_1 = X_s[:half], X_s[half:]
             
-            # Re-attach the sensitive attribute 's' so the base model can predict
+            # Re-attaching the sensitive attribute 's' so the base model can predict
             XS_0 = np.column_stack((X_s_0, np.full(len(X_s_0), s)))
             XS_1 = np.column_stack((X_s_1, np.full(len(X_s_1), s)))
             
-            # Predict and apply uniform jitter U([-\sigma, \sigma]) 
+            # Predicting and apply uniform jitter
             pred_0 = self.base_estimator.predict(XS_0)
             pred_1 = self.base_estimator.predict(XS_1)
             
@@ -76,62 +72,163 @@ class OTAwareFairRegressor:
             
         return self
 
-    def _predict_single(self, x, s):
-        """
-        Computes the fair prediction g_hat(x, s) for a single instance[cite: 131].
-        """
-        # Combine x and s for the base estimator
-        x_s_combined = np.concatenate((x, [s])).reshape(1, -1)
-        f_val = self.base_estimator.predict(x_s_combined)[0]
-        
-        # Add jitter [cite: 131]
-        f_val += np.random.uniform(-self.sigma, self.sigma)
-        
-        # Evaluate empirical CDF
-        ar1_s = self.ar1[s]
-        k_s = np.searchsorted(ar1_s, f_val)
-        
-        g_hat = 0.0
-        # Calculate the barycenter mapping [cite: 131]
-        for s_prime in self.groups:
-            ar0_sp = self.ar0[s_prime]
-            n_sp = len(ar0_sp)
-            
-            idx = int((n_sp * k_s) / len(ar1_s))
-            idx = min(idx, n_sp - 1)
-            
-            g_hat += self.p_hat[s_prime] * ar0_sp[idx]
-            
-        return g_hat
-        
     def predict(self, X, S=None):
-        """
-        Generates fair predictions.
-        
-        X: Input features.
-        S: Exact sensitive attributes (for the Awareness context).
-        delta: Matrix of shape (n_samples, n_groups) with estimated probabilities 
-               of S (for the Unawareness context).
-        """
-        predictions = []
+        predictions = np.zeros(len(X))
+        # If S is missing, use the proxy estimator to guess the classes
+        if S is None:
+            S = self.proxy_estimator.predict(X)
 
-        if S is None :
-            delta=self.proxy_estimator.predict_proba(X)
-         
-        for i in range(len(X)):
-            x = X[i]
+        # AWARENESS CONTEXT (Also handles Hard-Prediction Unawareness)
+        for s in self.groups:
+            mask = (S == s)
+            if not np.any(mask): 
+                continue
             
-            if S is not None:
-                # Awareness Context: Use the known sensitive attribute
-                predictions.append(self._predict_single(x, S[i]))
+            # Predicting base values for all items in this group at once
+            XS = np.column_stack((X[mask], S[mask]))
+            f_val = self.base_estimator.predict(XS)
+            f_val += np.random.uniform(-self.sigma, self.sigma, size=np.sum(mask))
+            
+            # Vectorized searchsorted to find the rank
+            k_s = np.searchsorted(self.ar1[s], f_val)
+            
+            # Convert the rank into a quantile (percentage between 0.0 and 1.0)
+            q = k_s / len(self.ar1[s])
+            
+            # Calculating Barycenter mapping
+            g_hat = np.zeros(len(f_val))
+            for s_prime in self.groups:
+                ar0_sp = self.ar0[s_prime]
+                n_sp = len(ar0_sp)
                 
-            elif delta is not None:
-                # Unawareness Context: Expected prediction using probability estimates
-                expected_g = 0.0
-                for j, s_prime in enumerate(self.groups):
-                    prob = delta[i][j]
-                    if prob > 0:
-                        expected_g += prob * self._predict_single(x, s_prime)
-                predictions.append(expected_g)
+                # Create a theoretical grid of quantiles for the target group
+                target_q = np.linspace(0, 1, n_sp)
                 
-        return np.array(predictions)
+                # We evaluate the target values (ar0_sp) at the specific quantiles (q) with np.interp 
+                mapped_values = np.interp(q, target_q, ar0_sp)
+                
+                g_hat += self.p_hat[s_prime] * mapped_values
+
+            predictions[mask] = g_hat
+            
+        return predictions
+    
+
+        """
+        def predict(self, X, S=None):
+
+        #Generates fair predictions using vectorized optimal transport mapping.
+        
+        #X: Input features.
+        #S: Exact sensitive attributes (for the Awareness context). 
+        #   If None, uses the proxy estimator (Unawareness context).
+
+        predictions = np.zeros(len(X))
+
+        if S is not None:
+            # AWARENESS CONTEXT
+            for s in self.groups:
+                mask = (S == s)
+                if not np.any(mask): 
+                    continue
+                
+                # Predicting base values for all items in this group at once
+                #XS = np.column_stack((X[mask], S[mask]))
+                #f_val = self.base_estimator.predict(XS)
+                #f_val += np.random.uniform(-self.sigma, self.sigma, size=np.sum(mask))
+                
+                # Vectorized searchsorted
+                #k_s = np.searchsorted(self.ar1[s], f_val)
+                
+                # Calculating Barycenter mapping
+                #g_hat = np.zeros(np.sum(mask))
+                #for s_prime in self.groups:
+                #    ar0_sp = self.ar0[s_prime]
+                #    n_sp = len(ar0_sp)
+                #    
+                #    # Computing mapped indices
+                #    idx = (n_sp * k_s) // len(self.ar1[s])
+                #    idx = np.clip(idx, 0, n_sp - 1) #to prevent potential out-of-bound errors
+                #    
+                #    g_hat += self.p_hat[s_prime] * ar0_sp[idx]
+                
+                #predictions[mask] = g_hat
+                
+                
+                # Vectorized searchsorted to find the rank
+                k_s = np.searchsorted(self.ar1[s], f_val)
+                
+                # Convert the rank into a quantile (percentage between 0.0 and 1.0)
+                q = k_s / len(self.ar1[s])
+                
+                # Calculating Barycenter mapping
+                g_hat = np.zeros(len(f_val))
+                for s_prime in self.groups:
+                    ar0_sp = self.ar0[s_prime]
+                    n_sp = len(ar0_sp)
+                    
+                    # Create a theoretical grid of quantiles for the target group which maps each sorted value in ar0_sp to a percentile between 0 and 1
+                    target_q = np.linspace(0, 1, n_sp)
+                    
+                    # We evaluate the target values (ar0_sp) at the specific quantiles (q) with np.interp 
+                    mapped_values = np.interp(q, target_q, ar0_sp)
+                    
+                    g_hat += self.p_hat[s_prime] * mapped_values
+
+                predictions[mask] = g_hat
+        else:
+            # UNAWARENESS CONTEXT: possibility of using probabilities of belonging to each group if given by the proxy estimator (DELTA)
+            delta = self.proxy_estimator.predict_proba(X)
+            expected_g = np.zeros(len(X))
+            
+            # Looping through the classes that the proxy estimator learned
+            for j, s in enumerate(self.proxy_estimator.classes_):
+                if s not in self.groups:
+                    continue
+                
+                # Assuming all instances belong to group 's' to find what their prediction would be if that were truly the case in the awareness framework.
+                XS = np.column_stack((X, np.full(len(X), s)))
+                f_val = self.base_estimator.predict(XS)
+                f_val += np.random.uniform(-self.sigma, self.sigma, size=len(X))
+                
+                
+                #k_s = np.searchsorted(self.ar1[s], f_val)
+                
+                #g_hat_s = np.zeros(len(X))
+                #for s_prime in self.groups:
+                #    ar0_sp = self.ar0[s_prime]
+                #    n_sp = len(ar0_sp)
+                    
+                #    idx = (n_sp * k_s) // len(self.ar1[s])
+                #    idx = np.clip(idx, 0, n_sp - 1)
+                    
+                #    g_hat_s += self.p_hat[s_prime] * ar0_sp[idx]
+
+                
+                # Vectorized searchsorted to find the rank
+                k_s = np.searchsorted(self.ar1[s], f_val)
+                
+                # Convert the rank into a quantile (percentage between 0.0 and 1.0)
+                q = k_s / len(self.ar1[s])
+                
+                # Calculating Barycenter mapping
+                g_hat_s = np.zeros(len(f_val))
+                for s_prime in self.groups:
+                    ar0_sp = self.ar0[s_prime]
+                    n_sp = len(ar0_sp)
+                    
+                    target_q = np.linspace(0, 1, n_sp)
+                    
+                    # We evaluate the target values (ar0_sp) at the specific quantiles (q) with np.interp 
+                    mapped_values = np.interp(q, target_q, ar0_sp)
+                    
+                    g_hat_s += self.p_hat[s_prime] * mapped_values
+                
+                # Multiplying the hypothetical fair prediction by the probability that the point actually belongs to group 's'
+                expected_g += delta[:, j] * g_hat_s
+            
+                
+            predictions = expected_g
+            
+        return predictions
+        """
