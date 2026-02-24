@@ -54,7 +54,7 @@ p = 0.5
 X, Y, S = generate_linear_data(n = n, alpha_0 = alpha_0, alpha_1 = alpha_1, x_scale = x_scale, noise_scale = noise_scale, p = p)
 
 # train-test split
-X_train, X_test, Y_train, Y_test, S_train, S_test = train_test_split(X, Y, S, train_size = 0.7)
+X_train, X_test, Y_train, Y_test, S_train, S_test = train_test_split(X, Y, S, train_size = 0.6)
 
 
 # %% 
@@ -516,8 +516,8 @@ plt.show()
 
 # Fair regresseur
 from sklearn.kernel_ridge import KernelRidge
-kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma=0.5)
-ot_reg_gp = OTUnawareFairRegressor(base_regressor= gp_reg,kernel_krr=kernel_krr)
+kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma=0.3)
+ot_reg_gp = OTUnawareFairRegressor(base_regressor= gp_reg,kernel_krr=kernel_krr, n_neighbors= 10)
 ot_reg_gp.fit(X_train, Y_train, S_train)
 y_gp_fair_krr = ot_reg_gp.predict(X_test, prediction= "krr")
 
@@ -618,7 +618,13 @@ def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
 
     plt.show()
 
-
+plot_fairness_correction(
+    X=X_test, 
+    y_unfair=y_gp, 
+    y_fair=y_gp_fair_knn, 
+    s_attr=S_test, 
+    save_path="./results/fairness_correction_scatter_gp.png"
+)
 plot_fairness_correction(
     X=X_test, 
     y_unfair=y_gp, 

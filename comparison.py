@@ -45,10 +45,17 @@ def evaluation_cross_validation(k, model, X, y, s , prediction = None):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
         s_train, s_test = s[train_index], s[test_index]
-    
-        model.fit(X_train, y_train, s_train)
-        
-        y_pred = model.predict(X_test, prediction = prediction)
+
+        if prediction == "unfair":
+            model.fit(X_train, y_train)
+        else:
+            model.fit(X_train, y_train, s_train)
+        if prediction == "aware":
+            y_pred = model.predict(X_test, s_test)
+        elif prediction == "unfair":
+            y_pred = model.predict(X_test)
+        else : 
+            y_pred = model.predict(X_test, prediction = prediction)
         mse, wass, ks = evaluation(y_test, y_pred, s_test) 
         
         fold_mse[fold] = mse 
@@ -103,21 +110,52 @@ kernel = 2 * RBF(length_scale=3.0, length_scale_bounds=(1e-2, 1e2))
 gp_reg = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9, alpha=noise_scale**2)
 ot_reg = OTUnawareFairRegressor(base_regressor= gp_reg)
 
-print("fair unaware ot (gp + knn): ")
-evaluation_cross_validation(10, ot_reg, X, y, s )
+# print("fair unaware ot (gp + knn): ")
+# evaluation_cross_validation(10, ot_reg, X, y, s )
 # %%
-
-
-from sklearn.kernel_ridge import KernelRidge
-for gamma in [1.2, 0.3, 0.4]:
-    kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma= gamma)
-
-    ot_reg_krr = OTUnawareFairRegressor(base_regressor= gp_reg, kernel_krr = kernel_krr)
-
-    print(f"fair unaware ot (gp + krr) with gamma {gamma}: ")
-    print(evaluation_cross_validation(5, ot_reg_krr, X, y, s, prediction= "krr" ))
 # %%
 # gamma with silverman rule
 h = np.std(y)*1000**(-0.2)*1.06
 print(h)
 # %%
+
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.base import BaseEstimator, RegressorMixin, clone
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+import scipy.stats as stats
+from OTAwareFairRegressor import OTAwareFairRegressor
+from sklearn.kernel_ridge import KernelRidge
+
+noise_scale = 0.3
+X, y, s = generate_linear_data(n = 2000, alpha_0 = 2, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
+kernel = 2 * RBF(length_scale=3.0, length_scale_bounds=(1e-2, 1e2))
+kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma = 0.3)
+
+gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2)
+
+
+
+
+print("unfair gp regressor: ")
+evaluation_cross_validation(5, gp_reg, X, y, s, prediction = "unfair")
+
+fair_derived_from_aware_model = OTAwareFairRegressor(base_estimator_model = gp_reg)
+
+print("fair aware ot (gp): ")
+evaluation_cross_validation(5, fair_derived_from_aware_model , X, y, s , prediction="aware")
+
+unaware_model =   OTUnawareFairRegressor(base_regressor= gp_reg, n_neighbors= 1, kernel_krr= kernel_krr )
+
+print("fair unaware ot (gp+knn): ")
+evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "knn" )
+
+print("fair unaware ot (gp+krr): ")
+evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "krr" )
+
+# %%
+
+
