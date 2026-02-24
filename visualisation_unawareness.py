@@ -515,9 +515,11 @@ plt.show()
 # %%
 
 # Fair regresseur
-ot_reg_gp = OTUnawareFairRegressor(base_regressor= gp_reg)
+from sklearn.kernel_ridge import KernelRidge
+kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma=0.5)
+ot_reg_gp = OTUnawareFairRegressor(base_regressor= gp_reg,kernel_krr=kernel_krr)
 ot_reg_gp.fit(X_train, Y_train, S_train)
-y_gp_fair = ot_reg_gp.predict(X_test, prediction= "krr")
+y_gp_fair_krr = ot_reg_gp.predict(X_test, prediction= "krr")
 
 y_gp_fair_knn = ot_reg_gp.predict(X_test, prediction= "knn")
 
@@ -620,7 +622,7 @@ def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
 plot_fairness_correction(
     X=X_test, 
     y_unfair=y_gp, 
-    y_fair=y_gp_fair, 
+    y_fair=y_gp_fair_krr, 
     s_attr=S_test, 
     save_path="./results/fairness_correction_scatter_gp.png"
 )
@@ -628,7 +630,7 @@ plot_fairness_correction(
 
 # %%
 
-# Calculate KS Distance
+# Calculate KS Distance 
 def plot_ks_comparison(y_unfair, y_fair, s_attr, group_names=None, save_path=None):
     """
     Calculates KS statistics and plots distribution histograms for unfair vs fair predictions.
@@ -718,17 +720,17 @@ def plot_ks_comparison(y_unfair, y_fair, s_attr, group_names=None, save_path=Non
 # You can now call it cleanly:
 plot_ks_comparison(
     y_unfair=y_gp, 
-    y_fair=y_gp_fair, 
-    s_attr=S_test, 
-    group_names=['Majority (S=1)', 'Minority (S=2)'], # Optional custom labels
-    save_path="./results/generic_data_unaware_KS_gp.png"
-)
-plot_ks_comparison(
-    y_unfair=y_gp, 
     y_fair=y_gp_fair_knn, 
     s_attr=S_test, 
     group_names=['Majority (S=1)', 'Minority (S=2)'], # Optional custom labels
-    save_path="./results/generic_data_unaware_KS_knn.png"
+    save_path="./results/generic_data_unaware_KS_gp_knn.png"
+)
+plot_ks_comparison(
+    y_unfair=y_gp, 
+    y_fair=y_gp_fair_krr, 
+    s_attr=S_test, 
+    group_names=['Majority (S=1)', 'Minority (S=2)'], # Optional custom labels
+    save_path="./results/generic_data_unaware_KS_gp_krr.png"
 )
 
 # %%
@@ -827,7 +829,7 @@ def plot_fairness_shift(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42
 
 plot_fairness_shift(
     y_unfair = y_gp, 
-    y_fair = y_gp_fair, 
+    y_fair = y_gp_fair_krr, 
     s_attr = S_test, 
     delta = ot_reg_gp.delta_predict, 
     n_samples = 50 
