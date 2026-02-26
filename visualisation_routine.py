@@ -88,7 +88,7 @@ color_maj = cmap(0)  # Color for S=1 (Orange)
 color_min = cmap(1)  # Color for S=2 (Green)
 color_all = 'black'  # Color for the unfair regressor
 
-plt.figure(figsize=(6, 5))
+plt.figure(figsize=(6, 4))
 
 # Plot Data Points (Split by group for the legend)
 plt.scatter(X[S == 1], Y[S == 1], color=color_maj, alpha=0.5, s=30, 
@@ -106,7 +106,7 @@ plt.show()
 
 
 #%%
-plt.figure(figsize=(5, 4))
+plt.figure(figsize=(5, 3.5))
 # Plot Data Points (Split by group for the legend)
 plt.scatter(X[S == 1], Y[S == 1], color=color_maj, alpha=0.5, s=30, 
             label='S=1')
@@ -656,9 +656,9 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 
 # 1. Setup the Experiment Parameters
-n_points = 10000  # LOT of points for smooth histograms
-alphas = np.linspace(0, 5, 15)  # From no separability to perfect separability
-alphas_to_plot = [0.0, 2.5, 5.0]  # Specific alphas to visualize histograms for
+n_points = 2000  # LOT of points for smooth histograms
+alphas = np.linspace(0.01, 5, 15)  # From no separability to perfect separability
+alphas_to_plot = [0.01, 2.5, 5.0]  # Specific alphas to visualize histograms for
 n_runs = 5  # Nombre de répétitions (générations) par valeur d'alpha
 
 histogram_data = {}
@@ -706,9 +706,9 @@ for alpha in alphas:
             delta_exp = np.random.randn(len(y_fair_exp)) # Dummy delta
             
         # Split condition based on delta
-        delta_median = np.median(delta_exp)
-        mask_pos = delta_exp > delta_median
-        mask_neg = delta_exp <= delta_median
+   
+        mask_pos = np.array([S_test_exp == 1])
+        mask_neg = np.array([S_test_exp == 2])
         
         # Ensure we don't calculate Wasserstein on empty arrays
         if sum(mask_pos) > 0 and sum(mask_neg) > 0:
@@ -744,6 +744,8 @@ for alpha in alphas:
     w1_fair_std.append(np.std(temp_w1_fair))
 
 # Convert to numpy arrays for easier plotting
+
+# %%
 alphas = np.array(alphas)
 mse_unfair_mean, mse_unfair_std = np.array(mse_unfair_mean), np.array(mse_unfair_std)
 mse_fair_mean, mse_fair_std = np.array(mse_fair_mean), np.array(mse_fair_std)
@@ -762,7 +764,7 @@ axes[0].fill_between(alphas, mse_unfair_mean - mse_unfair_std, mse_unfair_mean +
 axes[0].plot(alphas, mse_fair_mean, marker='*', color='tab:red', markersize=10, label='Fair Regressor')
 axes[0].fill_between(alphas, mse_fair_mean - mse_fair_std, mse_fair_mean + mse_fair_std, color='tab:red', alpha=0.2)
 
-axes[0].set_title("Mean Squared Error vs Separability (Alpha)")
+axes[0].set_title(r"Mean Squared Error vs Separability ($\alpha_0)")
 axes[0].set_xlabel(r"Separability ($\alpha_0$)")
 axes[0].set_ylabel("MSE")
 axes[0].grid(True, linestyle=':', alpha=0.6)
@@ -776,7 +778,7 @@ axes[1].plot(alphas, w1_fair_mean, marker='*', color='tab:blue', markersize=10, 
 axes[1].fill_between(alphas, w1_fair_mean - w1_fair_std, w1_fair_mean + w1_fair_std, color='tab:blue', alpha=0.2)
 
 axes[1].axhline(0, color='black', linewidth=1, linestyle='-', alpha=0.5)
-axes[1].set_title(r"Wasserstein Distance ($W_1$) conditioned on $\Delta$")
+axes[1].set_title(r"Wasserstein Distance ($W_1$) conditioned on S")
 axes[1].set_xlabel(r"Separability ($\alpha_0$)")
 axes[1].set_ylabel(r"$W_1$ Distance")
 axes[1].grid(True, linestyle=':', alpha=0.6)
@@ -805,16 +807,16 @@ for idx, (alpha, data) in enumerate(histogram_data.items()):
     bins = 100 # Adjusted bin count to avoid sparse artifacts
     
     # Plot Unfair Histograms
-    ax_unf.hist(y_u[mask_pos], bins=bins, density=True, alpha=0.5, color=c_pos, label=r'$\Delta >$ median')
-    ax_unf.hist(y_u[mask_neg], bins=bins, density=True, alpha=0.5, color=c_neg, label=r'$\Delta \leq$ median')
+    ax_unf.hist(y_u[mask_pos], bins=bins, density=True, alpha=0.5, color=c_pos, label=r'S = 1')
+    ax_unf.hist(y_u[mask_neg], bins=bins, density=True, alpha=0.5, color=c_neg, label=r'S = 2')
     ax_unf.set_title(r"Unfair Predictions ($\alpha_0 \approx %.1f$)" % alpha)
     ax_unf.set_ylabel("Density")
     ax_unf.legend(loc='upper right')
     ax_unf.grid(axis='y', alpha=0.3)
     
     # Plot Fair Histograms (Barycenter)
-    ax_fair.hist(y_f[mask_pos], bins=bins, density=True, alpha=0.5, color=c_pos, label=r'Fair | $\Delta >$ median')
-    ax_fair.hist(y_f[mask_neg], bins=bins, density=True, alpha=0.5, color=c_neg, label=r'Fair | $\Delta \leq$ median')
+    ax_fair.hist(y_f[mask_pos], bins=bins, density=True, alpha=0.5, color=c_pos, label=r'Fair | S = 1')
+    ax_fair.hist(y_f[mask_neg], bins=bins, density=True, alpha=0.5, color=c_neg, label=r'Fair | S = 2')
     
     # Adding an outline for the overall barycenter distribution
     ax_fair.hist(y_f, bins=bins, density=True, histtype='step', linewidth=2, color='black', linestyle='--', label='Overall Barycenter')

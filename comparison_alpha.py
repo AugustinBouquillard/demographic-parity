@@ -52,8 +52,9 @@ def evaluation_cross_validation(k, model, X, y, s , prediction = None):
             model.fit(X_train, y_train, s_train)
         if prediction == "aware":
             y_pred = model.predict(X_test, s_test)
-        elif prediction == "unfair":
+        elif prediction == "unfair" or "plug_in":
             y_pred = model.predict(X_test)
+
         else : 
             y_pred = model.predict(X_test, prediction = prediction)
         mse, wass, ks = evaluation(y_test, y_pred, s_test) 
@@ -150,68 +151,184 @@ gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alph
 
 unaware_model =   OTUnawareFairRegressor(base_regressor= gp_reg, n_neighbors= 1, kernel_krr= kernel_krr )
 
-print("fair unaware ot (gp+knn): ")
-evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "knn" )
+# print("fair unaware ot (gp+knn): ")
+# evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "knn" )
 
-print("fair unaware ot (gp+krr): ")
-evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "krr" )
+# print("fair unaware ot (gp+krr): ")
+# evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "krr" )
 
 # %%
 
 
-alpha_list = np.linspace(0, 100, 10)
+alpha_list = np.linspace(0.3, 5, 6)
 alpha_len = len(alpha_list)
-results_means = np.zeros((alpha_len + 1 , 3))
-results_stds =  np.zeros((alpha_len + 1 , 3))
-
+results_means = np.zeros((alpha_len  , 3))
+results_stds =  np.zeros((alpha_len  , 3))
+results_means_aware = np.zeros((alpha_len  , 3))
+results_stds_aware =  np.zeros((alpha_len  , 3))
+results_means_unfair = np.zeros((alpha_len  , 3))
+results_stds_unfair =  np.zeros((alpha_len  , 3))
 noise_scale = 0.3
-kernel = 2 * RBF(length_scale=3.0, length_scale_bounds=(1e-2, 1e2))
-kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma = 0.3)
 
-gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2)
-
-# unaware_model =   OTUnawareFairRegressor(base_regressor= gp_reg, n_neighbors= 5, kernel_krr= kernel_krr )
-
+# %%
 for idx, alpha in enumerate(alpha_list ): 
-    X, y, s = generate_linear_data(n = 1000, alpha_0 = alpha, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
-    kernel = 2 * RBF(length_scale=3.0+alpha, length_scale_bounds=(1e-2, 1e2))
-    kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma = 0.3)
+
+
+    X, y, s = generate_linear_data(n = 1500, alpha_0 = alpha, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
+
+
+    kernel = 2 * RBF(length_scale=1*alpha+1, length_scale_bounds=(1e-2, 1e2))
+  
 
     gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2)
  
-    unaware_model =   OTUnawareFairRegressor(base_regressor= gp_reg, n_neighbors= 5, kernel_krr= kernel_krr )
+    unaware_model =   OTUnawareFairRegressor(base_regressor= gp_reg, n_neighbors= 5)
     
-    means, stds = evaluation_cross_validation(4, unaware_model , X, y, s, prediction = "knn" )
+    means, stds = evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "knn" )
     results_means[idx] = means 
     results_stds[idx] = stds
 
-fair_derived_from_aware_model = OTAwareFairRegressor(base_estimator_model = gp_reg)
 
-print("fair aware ot (gp): ")
-means, stds = evaluation_cross_validation(5, fair_derived_from_aware_model , X, y, s , prediction="aware")
-results_means[-1] = means 
-results_stds[-1] = stds
-    
-print(results_means)
-print(results_stds)
+for idx, alpha in enumerate(alpha_list ): 
+    X, y, s = generate_linear_data(n = 2000, alpha_0 = alpha, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
 
-plt.plot(np.concatenate(alpha_list, [100000]), results_means[:, 0], label = "mse")
-plt.plot(np.concatenate(alpha_list, [100000]), results_means[:, 0] + results_stds[:, 0], label = "mse")
-plt.plot(np.concatenate(alpha_list, [100000]), results_means[:, 0] -results_stds[:, 0], label = "mse")
+    kernel = 2 * RBF(length_scale=1*alpha+1, length_scale_bounds=(1e-2, 1e2))
 
-plt.plot(np.concatenate(alpha_list, [100000]), results_means[:, 1], label = "w2")
-plt.plot(np.concatenate(alpha_list, [100000]), results_means[:, 1] + results_stds[:, 1], label = "w2")
-plt.plot(np.concatenate(alpha_list, [100000]), results_means[:, 1] -results_stds[:, 1], label = "w2")
+    gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2)
+    fair_derived_from_aware_model = OTAwareFairRegressor(base_estimator_model = gp_reg) 
 
-plt.plot(np.concatenate(alpha_list, [100000]), results_means[:, 2], label = "KS")
-plt.plot(np.concatenate(alpha_list, [100000]), results_means[:, 2] + results_stds[:, 2], label = "KS")
-plt.plot(np.concatenate(alpha_list, [100000]), results_means[:, 2] -results_stds[:, 2], label = "KS")
 
-plt.legend()
-plt.show()
+    means, stds = evaluation_cross_validation(5, fair_derived_from_aware_model , X, y, s , prediction="aware")
+
+    results_means_aware[idx] = means 
+    results_stds_aware[idx] = stds 
+
+# %%
+for idx, alpha in enumerate(alpha_list ): 
+    X, y, s = generate_linear_data(n = 2000, alpha_0 = alpha, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
+
+    kernel = 2 * RBF(length_scale=1*alpha+1, length_scale_bounds=(1e-2, 1e2))
+
+    gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2)
+   
+
+
+    means, stds = evaluation_cross_validation(5, gp_reg , X, y, s , prediction="unfair")
+
+    results_means_unfair[idx] = means 
+    results_stds_unfair[idx] = stds 
+
+# %%
+alpha
+
+# %%
+results_means_aware_plug = np.zeros((alpha_len  , 3))
+results_stds_aware_plug =  np.zeros((alpha_len  , 3))
+
+for idx, alpha in enumerate(alpha_list ): 
+    X, y, s = generate_linear_data(n = 2000, alpha_0 = alpha, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
+
+    kernel = 2 * RBF(length_scale=1*alpha+1, length_scale_bounds=(1e-2, 1e2))
+
+    gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2)
+    fair_derived_from_aware_model = OTAwareFairRegressor(base_estimator_model = gp_reg) 
+
+    means, stds = evaluation_cross_validation(5, fair_derived_from_aware_model , X, y, s , prediction="None")
+
+    results_means_aware_plug[idx] = means 
+    results_stds_aware_plug[idx] = stds 
+# %%
+alpha_list
+# %%
+plt.scatter(X, y, c = s)
+plt.plot()
+# %%
 
 # %%
 alpha_list
 # %%
-s
+indicators = ['MSE', 'Wasserstein 2', 'KS Distance']
+colors = {'aware': '#1f77b4', 'unaware': '#ff7f0e', 'unfair': "#4c7e15"}  # Blue and Orange
+
+# --- 2. Plotting ---
+fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharex=True)
+
+for i, ax in enumerate(axes):
+    indicator_name = indicators[i]
+    
+    # Aware Case
+    ax.plot(alpha_list, results_means_aware[:, i], 
+            label='Aware Case', color=colors['aware'], lw=2, marker='o', markersize=4)
+    ax.fill_between(alpha_list, 
+                    results_means_aware[:, i] - results_stds_aware[:, i], 
+                    results_means_aware[:, i] + results_stds_aware[:, i], 
+                    color=colors['aware'], alpha=0.15)
+    
+    # Unaware Case
+    ax.plot(alpha_list, results_means[:, i], 
+            label='Unaware Case', color=colors['unaware'], lw=2, marker='s', markersize=4)
+    ax.fill_between(alpha_list, 
+                    results_means[:, i] - results_stds[:, i], 
+                    results_means[:, i] + results_stds[:, i], 
+                    color=colors['unaware'], alpha=0.15)
+    
+    # Unfair Case
+    ax.plot(alpha_list, results_means_unfair[:, i], 
+            label='Unfair Case', color=colors['unfair'], lw=2, marker='s', markersize=4)
+    ax.fill_between(alpha_list, 
+                    results_means_unfair[:, i] - results_stds_unfair[:, i], 
+                    results_means_unfair[:, i] + results_stds_unfair[:, i], 
+                    color=colors['unfair'], alpha=0.15)
+    # Formatting each subplot
+    ax.set_title(f'{indicator_name} vs $\\alpha$', fontsize=14)
+    ax.set_xlabel(r'$\alpha$', fontsize=12)
+    ax.set_ylabel('Value', fontsize=12)
+    ax.grid(True, linestyle='--', alpha=0.6)
+    
+    # Legend only on the first or last plot to save space
+    if i == 0:
+        ax.legend(loc='best')
+
+plt.tight_layout()
+
+plt.show()
+# %%
+
+# visualisation
+cmap = plt.get_cmap('tab10')
+color_maj = cmap(0)  # Color for S=1 (Orange)
+color_min = cmap(1)  # Color for S=2 (Green)
+color_all = 'black'  # Color for the unfair regressor
+
+plt.figure(figsize=(10, 6))
+
+# Plot Data Points (Split by group for the legend)
+plt.scatter(X[s == 1], y[s == 1], color=color_maj, alpha=0.5, s=30, 
+            label='Data S=1 (Majority)')
+
+plt.scatter(X[s == 2], y[s == 2], color=color_min, alpha=0.5, s=30, 
+            label='Data S=2 (Minority)')
+
+# Plot Regression Lines 
+# Create X range for smooth lines
+x_range_min = X.min() - 0.2
+x_range_max = X.max() + 0.2
+X_plot = np.linspace(x_range_min, x_range_max, 1000).reshape(-1, 1)
+
+# Line for S=1
+
+
+# Line for Unfair (Combined)
+plt.plot(X_plot, fair_derived_from_aware_model.predict(X_plot), color=color_all, linestyle='--', 
+         linewidth=2, label='Unfair Regressor (Combined)')
+
+plt.title(" Bias in Generated Data (Gaussian process regressor)", fontsize=14)
+plt.xlabel("Feature X")
+plt.ylabel("Target Y")
+
+# Legend
+plt.legend(frameon=True, loc='best')
+
+plt.tight_layout()
+plt.show()
 # %%
