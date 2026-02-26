@@ -14,6 +14,8 @@ from OTUnawareFairRegressor import OTUnawareFairRegressor
 from data_extraction_script import read_adult_dataset
 from matplotlib.collections import LineCollection
 from matplotlib.lines import Line2D
+from sklearn.metrics import mean_squared_error
+from scipy.stats import wasserstein_distance
 
 
 
@@ -588,6 +590,7 @@ def plot_fairness_shift(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42
     ax_hist.legend(loc='upper right')
     ax_hist.tick_params(labelbottom=False) # Hide x-ticks to blend with the plot below
     ax_hist.grid(axis='x', alpha=0.3)
+    #plt.show()
 
     # ==========================================
     # 2. BOTTOM PANEL: Transport Map (Scatter)
@@ -628,7 +631,7 @@ def plot_fairness_shift(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42
     
     fig.suptitle(f"Fairness Correction Transport Map (Sampled {len(y_u)} points)", y=0.95)
     
-    plt.tight_layout()
+    #plt.tight_layout()
     plt.savefig("./results/generic_data_unaware_correction_line_with_hist.png", dpi=300) 
     plt.show()
 
@@ -642,4 +645,185 @@ plot_fairness_shift(
 
 
 
+# %%
+# %%
+# %%
+from scipy.stats import wasserstein_distance
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+
+# 1. Setup the Experiment Parameters
+n_points = 10000  # LOT of points for smooth histograms
+alphas = np.linspace(0, 5, 15)  # From no separability to perfect separability
+alphas_to_plot = [0.0, 2.5, 5.0]  # Specific alphas to visualize histograms for
+n_runs = 5  # Nombre de répétitions (générations) par valeur d'alpha
+
+histogram_data = {}
+
+# Tracking metrics (Means and Stds)
+mse_unfair_mean, mse_unfair_std = [], []
+mse_fair_mean, mse_fair_std = [], []
+w1_unfair_mean, w1_unfair_std = [], []
+w1_fair_mean, w1_fair_std = [], []
+
+print(f"Running experiment over alpha values with {n_runs} runs per alpha...")
+
+# 2. Loop through different alpha (separability) values
+for alpha in alphas:
+    # Temporary lists for the current alpha
+    temp_mse_unf, temp_mse_fair = [], []
+    temp_w1_unf, temp_w1_fair = [], []
+    
+    for run in range(n_runs):
+        # Generate large dataset for smoothness (change seed per run for variance)
+        X_exp, Y_exp, S_exp = generate_linear_data(
+            n=n_points, alpha_0=alpha, alpha_1=1, x_scale=1, noise_scale=0.3, seed=run + int(alpha*100)
+        )
+        
+        X_train_exp, X_test_exp, Y_train_exp, Y_test_exp, S_train_exp, S_test_exp = train_test_split(
+            X_exp, Y_exp, S_exp, train_size=0.7, random_state=run
+        )
+        
+        # Train Unfair Regressor
+        std_reg_exp = LinearRegression().fit(X_train_exp, Y_train_exp)
+        y_unfair_exp = std_reg_exp.predict(X_test_exp)
+        
+        try:
+            # Train OT Unaware Fair Regressor
+            ot_reg_exp = OTUnawareFairRegressor()
+            ot_reg_exp.fit(X_train_exp, Y_train_exp, S_train_exp)
+            y_fair_exp = ot_reg_exp.predict(X_test_exp, prediction="knn")
+            delta_exp = ot_reg_exp.delta_predict
+            
+        except AssertionError:
+            # If proxy collapses because alpha is too low (no separability)
+            if run == 0:
+                print(f"Alpha {alpha:.2f}: Proxy collapsed (no separability). Using unfair baseline.")
+            y_fair_exp = y_unfair_exp.copy()
+            delta_exp = np.random.randn(len(y_fair_exp)) # Dummy delta
+            
+        # Split condition based on delta
+        delta_median = np.median(delta_exp)
+        mask_pos = delta_exp > delta_median
+        mask_neg = delta_exp <= delta_median
+        
+        # Ensure we don't calculate Wasserstein on empty arrays
+        if sum(mask_pos) > 0 and sum(mask_neg) > 0:
+            w1_unf = wasserstein_distance(y_unfair_exp[mask_pos], y_unfair_exp[mask_neg])
+            w1_f = wasserstein_distance(y_fair_exp[mask_pos], y_fair_exp[mask_neg])
+        else:
+            w1_unf, w1_f = 0.0, 0.0
+        
+        # Compute & Store Metrics for this run
+        temp_mse_unf.append(mean_squared_error(Y_test_exp, y_unfair_exp))
+        temp_mse_fair.append(mean_squared_error(Y_test_exp, y_fair_exp))
+        temp_w1_unf.append(w1_unf)
+        temp_w1_fair.append(w1_f)
+        
+        # Save histogram data only for the first run of the requested alphas
+        if run == 0 and any(np.isclose(alpha, a, atol=0.1) for a in alphas_to_plot) and len(histogram_data) < len(alphas_to_plot):
+            histogram_data[alpha] = {
+                'y_u': y_unfair_exp, 'y_f': y_fair_exp, 
+                'mask_pos': mask_pos, 'mask_neg': mask_neg, 'w1_f': w1_f
+            }
+            
+    # Calculate Mean and Standard Deviation for the current alpha
+    mse_unfair_mean.append(np.mean(temp_mse_unf))
+    mse_unfair_std.append(np.std(temp_mse_unf))
+    
+    mse_fair_mean.append(np.mean(temp_mse_fair))
+    mse_fair_std.append(np.std(temp_mse_fair))
+    
+    w1_unfair_mean.append(np.mean(temp_w1_unf))
+    w1_unfair_std.append(np.std(temp_w1_unf))
+    
+    w1_fair_mean.append(np.mean(temp_w1_fair))
+    w1_fair_std.append(np.std(temp_w1_fair))
+
+# Convert to numpy arrays for easier plotting
+alphas = np.array(alphas)
+mse_unfair_mean, mse_unfair_std = np.array(mse_unfair_mean), np.array(mse_unfair_std)
+mse_fair_mean, mse_fair_std = np.array(mse_fair_mean), np.array(mse_fair_std)
+w1_unfair_mean, w1_unfair_std = np.array(w1_unfair_mean), np.array(w1_unfair_std)
+w1_fair_mean, w1_fair_std = np.array(w1_fair_mean), np.array(w1_fair_std)
+
+print("Experiment complete. Plotting results...")
+
+# 3. Plot Metrics (MSE and Wasserstein Distance) with Confidence Intervals
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# --- MSE Plot ---
+axes[0].plot(alphas, mse_unfair_mean, marker='o', linestyle='--', color='gray', label='Unfair Regressor')
+axes[0].fill_between(alphas, mse_unfair_mean - mse_unfair_std, mse_unfair_mean + mse_unfair_std, color='gray', alpha=0.2)
+
+axes[0].plot(alphas, mse_fair_mean, marker='*', color='tab:red', markersize=10, label='Fair Regressor')
+axes[0].fill_between(alphas, mse_fair_mean - mse_fair_std, mse_fair_mean + mse_fair_std, color='tab:red', alpha=0.2)
+
+axes[0].set_title("Mean Squared Error vs Separability (Alpha)")
+axes[0].set_xlabel(r"Separability ($\alpha_0$)")
+axes[0].set_ylabel("MSE")
+axes[0].grid(True, linestyle=':', alpha=0.6)
+axes[0].legend()
+
+# --- Wasserstein Distance Plot ---
+axes[1].plot(alphas, w1_unfair_mean, marker='o', linestyle='--', color='gray', label='Unfair Regressor')
+axes[1].fill_between(alphas, w1_unfair_mean - w1_unfair_std, w1_unfair_mean + w1_unfair_std, color='gray', alpha=0.2)
+
+axes[1].plot(alphas, w1_fair_mean, marker='*', color='tab:blue', markersize=10, label='Fair Regressor')
+axes[1].fill_between(alphas, w1_fair_mean - w1_fair_std, w1_fair_mean + w1_fair_std, color='tab:blue', alpha=0.2)
+
+axes[1].axhline(0, color='black', linewidth=1, linestyle='-', alpha=0.5)
+axes[1].set_title(r"Wasserstein Distance ($W_1$) conditioned on $\Delta$")
+axes[1].set_xlabel(r"Separability ($\alpha_0$)")
+axes[1].set_ylabel(r"$W_1$ Distance")
+axes[1].grid(True, linestyle=':', alpha=0.6)
+axes[1].legend()
+
+plt.tight_layout()
+plt.show()
+
+# 4. Plot Smooth Histograms for specific Alphas
+fig, axes = plt.subplots(len(histogram_data), 2, figsize=(14, 4 * len(histogram_data)), sharex=False, sharey=False)
+
+cmap = plt.get_cmap('tab10')
+c_pos, c_neg = cmap(0), cmap(1)
+
+# Ensure axes is 2D even if there's only 1 alpha to plot
+if len(histogram_data) == 1:
+    axes = np.expand_dims(axes, axis=0)
+
+for idx, (alpha, data) in enumerate(histogram_data.items()):
+    ax_unf = axes[idx, 0]
+    ax_fair = axes[idx, 1]
+    
+    y_u, y_f = data['y_u'], data['y_f']
+    mask_pos, mask_neg = data['mask_pos'], data['mask_neg']
+    
+    bins = 100 # Adjusted bin count to avoid sparse artifacts
+    
+    # Plot Unfair Histograms
+    ax_unf.hist(y_u[mask_pos], bins=bins, density=True, alpha=0.5, color=c_pos, label=r'$\Delta >$ median')
+    ax_unf.hist(y_u[mask_neg], bins=bins, density=True, alpha=0.5, color=c_neg, label=r'$\Delta \leq$ median')
+    ax_unf.set_title(r"Unfair Predictions ($\alpha_0 \approx %.1f$)" % alpha)
+    ax_unf.set_ylabel("Density")
+    ax_unf.legend(loc='upper right')
+    ax_unf.grid(axis='y', alpha=0.3)
+    
+    # Plot Fair Histograms (Barycenter)
+    ax_fair.hist(y_f[mask_pos], bins=bins, density=True, alpha=0.5, color=c_pos, label=r'Fair | $\Delta >$ median')
+    ax_fair.hist(y_f[mask_neg], bins=bins, density=True, alpha=0.5, color=c_neg, label=r'Fair | $\Delta \leq$ median')
+    
+    # Adding an outline for the overall barycenter distribution
+    ax_fair.hist(y_f, bins=bins, density=True, histtype='step', linewidth=2, color='black', linestyle='--', label='Overall Barycenter')
+    
+    ax_fair.set_title(r"Fair Predictions ($\alpha_0 \approx %.1f$) | $W_1 = %.4f$" % (alpha, data['w1_f']))
+    ax_fair.legend(loc='upper right')
+    ax_fair.grid(axis='y', alpha=0.3)
+
+plt.suptitle("Density Distributions Before and After OT Fairness Correction (Sample Run)", fontsize=16, y=1.02)
+plt.tight_layout()
+plt.show()
 # %%
