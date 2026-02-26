@@ -233,7 +233,7 @@ for idx, alpha in enumerate(alpha_list ):
     gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2)
     fair_derived_from_aware_model = OTAwareFairRegressor(base_estimator_model = gp_reg) 
 
-    means, stds = evaluation_cross_validation(5, fair_derived_from_aware_model , X, y, s , prediction="None")
+    means, stds = evaluation_cross_validation(5, fair_derived_from_aware_model , X, y, s , prediction="plugin")
 
     results_means_aware_plug[idx] = means 
     results_stds_aware_plug[idx] = stds 
@@ -248,43 +248,56 @@ plt.plot()
 alpha_list
 # %%
 indicators = ['MSE', 'Wasserstein 2', 'KS Distance']
-colors = {'aware': '#1f77b4', 'unaware': '#ff7f0e', 'unfair': "#4c7e15"}  # Blue and Orange
+colors = {'aware': '#1f77b4', 'unaware': '#ff7f0e', 'unfair': "#867AEC", 'aware_derived': "#4c7e15"}  # Blue and Orange
 
 # --- 2. Plotting ---
-fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharex=True)
+fig, axes = plt.subplots(1, 3, figsize=(10, 3), sharex=True)
 
 for i, ax in enumerate(axes):
     indicator_name = indicators[i]
     
+        # Unfair Case
+    ax.plot(alpha_list, results_means_unfair[:, i], 
+            label='Unfair', color=colors['unfair'], lw=2, marker='s', markersize=4)
+    ax.fill_between(alpha_list, 
+                    results_means_unfair[:, i] - results_stds_unfair[:, i], 
+                    results_means_unfair[:, i] + results_stds_unfair[:, i], 
+                    color=colors['unfair'], alpha=0.15)
+    
     # Aware Case
     ax.plot(alpha_list, results_means_aware[:, i], 
-            label='Aware Case', color=colors['aware'], lw=2, marker='o', markersize=4)
+            label='Aware', color=colors['aware'], lw=2, marker='o', markersize=4)
     ax.fill_between(alpha_list, 
                     results_means_aware[:, i] - results_stds_aware[:, i], 
                     results_means_aware[:, i] + results_stds_aware[:, i], 
                     color=colors['aware'], alpha=0.15)
     
+
+    ax.plot(alpha_list, results_means_aware_plug[:, i], 
+            label='Aware derived', color=colors['aware_derived'], lw=2, marker='s', markersize=4)
+    ax.fill_between(alpha_list, 
+                    results_means_aware_plug[:, i] - results_stds_aware_plug[:, i], 
+                    results_means_aware_plug[:, i] + results_stds_aware_plug[:, i], 
+                    color=colors['aware_derived'], alpha=0.15)
+    
     # Unaware Case
     ax.plot(alpha_list, results_means[:, i], 
-            label='Unaware Case', color=colors['unaware'], lw=2, marker='s', markersize=4)
+            label='Unaware opt', color=colors['unaware'], lw=2, marker='s', markersize=4)
     ax.fill_between(alpha_list, 
                     results_means[:, i] - results_stds[:, i], 
                     results_means[:, i] + results_stds[:, i], 
                     color=colors['unaware'], alpha=0.15)
     
-    # Unfair Case
-    ax.plot(alpha_list, results_means_unfair[:, i], 
-            label='Unfair Case', color=colors['unfair'], lw=2, marker='s', markersize=4)
-    ax.fill_between(alpha_list, 
-                    results_means_unfair[:, i] - results_stds_unfair[:, i], 
-                    results_means_unfair[:, i] + results_stds_unfair[:, i], 
-                    color=colors['unfair'], alpha=0.15)
+
+
+
     # Formatting each subplot
-    ax.set_title(f'{indicator_name} vs $\\alpha$', fontsize=14)
-    ax.set_xlabel(r'$\alpha$', fontsize=12)
-    ax.set_ylabel('Value', fontsize=12)
+    ax.set_title(f'{indicator_name}', fontsize=14)
+    if i == 1 :
+        ax.set_xlabel(r'discriminability $\alpha_0$', fontsize=12)
+    # ax.set_ylabel('Value', fontsize=12)
     ax.grid(True, linestyle='--', alpha=0.6)
-    
+    plt.xticks(alpha_list)
     # Legend only on the first or last plot to save space
     if i == 0:
         ax.legend(loc='best')
