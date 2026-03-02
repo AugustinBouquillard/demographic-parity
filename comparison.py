@@ -140,22 +140,23 @@ gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alph
 print("unfair gp regressor: ")
 evaluation_cross_validation(5, gp_reg, X, y, s, prediction = "unfair")
 
-fair_derived_from_aware_model = OTAwareFairRegressor(base_estimator_model = gp_reg)
+aware_model = OTAwareFairRegressor(base_estimator_model = gp_reg)
 
 print("fair aware (gp): ")
-evaluation_cross_validation(5, fair_derived_from_aware_model , X, y, s , prediction="aware")
+evaluation_cross_validation(5, aware_model , X, y, s , prediction="aware")
 
-unaware_model =   OTUnawareFairRegressor(base_regressor= gp_reg, n_neighbors= 1, kernel_krr= kernel_krr )
+unaware_model =   OTUnawareFairRegressor(base_regressor= gp_reg, n_neighbors= 2)
 
 print("fair unaware (gp+knn): ")
 evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "knn" )
 
+unaware_krr_model =   OTUnawareFairRegressor(base_regressor= gp_reg, n_neighbors= 1, kernel_krr= kernel_krr )
 print("fair unaware (gp+krr): ")
-evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "krr" )
+evaluation_cross_validation(5, unaware_krr_model , X, y, s, prediction = "krr" )
 
-
+aware_derived_model = OTAwareFairRegressor(base_estimator_model = gp_reg)
 print("fair aware derived (gp): ")
-evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "plugin" )
+evaluation_cross_validation(5, aware_derived_model , X, y, s, prediction = "plugin" )
 
 # %%
 

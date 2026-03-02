@@ -1,4 +1,7 @@
-# Evaluation of the performance and the fairness 
+# Evaluation of the impact of alpha_0
+
+# methods include :
+# unfair GP regressor, aware(GP), unaware(GP + kNN), aware derived (with S predicted instead of true S)
 
 # For performance: MSE
 # For fairness : Wasserstein-2, KS (maximum difference between the CFD)
@@ -9,6 +12,21 @@ import ot
 from scipy.stats import ks_2samp
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import KFold
+
+from OTUnawareFairRegressor import OTUnawareFairRegressor 
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF
+
+
+import matplotlib.pyplot as plt
+from sklearn.base import BaseEstimator, RegressorMixin, clone
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+import scipy.stats as stats
+from OTAwareFairRegressor import OTAwareFairRegressor
+from sklearn.kernel_ridge import KernelRidge
 
 # %%
 def evaluation(y_unfair, y_fair, s_attr):
@@ -75,10 +93,6 @@ def evaluation_cross_validation(k, model, X, y, s , prediction = None):
 
 # %%
 
-from OTUnawareFairRegressor import OTUnawareFairRegressor 
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF
-
 def generate_linear_data(n , alpha_0, alpha_1, p = 0.3, x_scale = 1, noise_scale = 1, seed = 42):
     """
     Generate 1D linear data.  
@@ -111,56 +125,13 @@ kernel = 2 * RBF(length_scale=3.0, length_scale_bounds=(1e-2, 1e2))
 gp_reg = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9, alpha=noise_scale**2)
 ot_reg = OTUnawareFairRegressor(base_regressor= gp_reg)
 
-# print("fair unaware ot (gp + knn): ")
-# evaluation_cross_validation(10, ot_reg, X, y, s )
-# %%
-# %%
 # gamma with silverman rule
 h = np.std(y)*1000**(-0.2)*1.06
 print(h)
-# %%
-
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.base import BaseEstimator, RegressorMixin, clone
-from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
-import scipy.stats as stats
-from OTAwareFairRegressor import OTAwareFairRegressor
-from sklearn.kernel_ridge import KernelRidge
-
-noise_scale = 0.3
-X, y, s = generate_linear_data(n = 2000, alpha_0 = 2, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
-kernel = 2 * RBF(length_scale=3.0, length_scale_bounds=(1e-2, 1e2))
-kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma = 0.3)
-
-gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2)
-
-
-
-
-# print("unfair gp regressor: ")
-# evaluation_cross_validation(5, gp_reg, X, y, s, prediction = "unfair")
-
-# fair_derived_from_aware_model = OTAwareFairRegressor(base_estimator_model = gp_reg)
-
-# print("fair aware ot (gp): ")
-# evaluation_cross_validation(5, fair_derived_from_aware_model , X, y, s , prediction="aware")
-
-unaware_model =   OTUnawareFairRegressor(base_regressor= gp_reg, n_neighbors= 1, kernel_krr= kernel_krr )
-
-# print("fair unaware ot (gp+knn): ")
-# evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "knn" )
-
-# print("fair unaware ot (gp+krr): ")
-# evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "krr" )
 
 # %%
 
-
-alpha_list = np.linspace(0.1, 5, 8)
+alpha_list = np.linspace(0.3, 4.5, 6)
 alpha_len = len(alpha_list)
 results_means = np.zeros((alpha_len  , 3))
 results_stds =  np.zeros((alpha_len  , 3))
@@ -171,10 +142,12 @@ results_stds_unfair =  np.zeros((alpha_len  , 3))
 noise_scale = 0.3
 
 # %%
+
+# unaware (gp + knn)
 for idx, alpha in enumerate(alpha_list ): 
 
 
-    X, y, s = generate_linear_data(n = 1500, alpha_0 = alpha, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
+    X, y, s = generate_linear_data(n = 2000, alpha_0 = alpha, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
 
 
     kernel = 2 * RBF(length_scale=1*alpha+1, length_scale_bounds=(1e-2, 1e2))
@@ -188,7 +161,7 @@ for idx, alpha in enumerate(alpha_list ):
     results_means[idx] = means 
     results_stds[idx] = stds
 
-
+# aware 
 for idx, alpha in enumerate(alpha_list ): 
     X, y, s = generate_linear_data(n = 2000, alpha_0 = alpha, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
 
@@ -204,6 +177,8 @@ for idx, alpha in enumerate(alpha_list ):
     results_stds_aware[idx] = stds 
 
 # %%
+
+# unfair (gp)
 for idx, alpha in enumerate(alpha_list ): 
     X, y, s = generate_linear_data(n = 2000, alpha_0 = alpha, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
 
@@ -221,6 +196,7 @@ for idx, alpha in enumerate(alpha_list ):
 
 
 # %%
+# aware (plug in)
 results_means_aware_plug = np.zeros((alpha_len  , 3))
 results_stds_aware_plug =  np.zeros((alpha_len  , 3))
 
@@ -237,10 +213,10 @@ for idx, alpha in enumerate(alpha_list ):
     results_means_aware_plug[idx] = means 
     results_stds_aware_plug[idx] = stds 
 # %%
+
 indicators = ['MSE', 'Wasserstein 2', 'KS Distance']
 colors = {'aware': '#1f77b4', 'unaware': '#ff7f0e', 'unfair': "#867AEC", 'aware_derived': "#4c7e15"}  # Blue and Orange
 
-# --- 2. Plotting ---
 fig, axes = plt.subplots(1, 3, figsize=(10, 3), sharex=True)
 
 for i, ax in enumerate(axes):
@@ -272,7 +248,7 @@ for i, ax in enumerate(axes):
     
     # Unaware Case
     ax.plot(alpha_list, results_means[:, i], 
-            label='Unaware opt', color=colors['unaware'], lw=2, marker='s', markersize=4)
+            label='Unaware', color=colors['unaware'], lw=2, marker='s', markersize=4)
     ax.fill_between(alpha_list, 
                     results_means[:, i] - results_stds[:, i], 
                     results_means[:, i] + results_stds[:, i], 
@@ -295,43 +271,5 @@ for i, ax in enumerate(axes):
 plt.tight_layout()
 
 plt.show()
-# %%
 
-# visualisation
-cmap = plt.get_cmap('tab10')
-color_maj = cmap(0)  # Color for S=1 (Orange)
-color_min = cmap(1)  # Color for S=2 (Green)
-color_all = 'black'  # Color for the unfair regressor
-
-plt.figure(figsize=(10, 6))
-
-# Plot Data Points (Split by group for the legend)
-plt.scatter(X[s == 1], y[s == 1], color=color_maj, alpha=0.5, s=30, 
-            label='Data S=1 (Majority)')
-
-plt.scatter(X[s == 2], y[s == 2], color=color_min, alpha=0.5, s=30, 
-            label='Data S=2 (Minority)')
-
-# Plot Regression Lines 
-# Create X range for smooth lines
-x_range_min = X.min() - 0.2
-x_range_max = X.max() + 0.2
-X_plot = np.linspace(x_range_min, x_range_max, 1000).reshape(-1, 1)
-
-# Line for S=1
-
-
-# Line for Unfair (Combined)
-plt.plot(X_plot, fair_derived_from_aware_model.predict(X_plot), color=color_all, linestyle='--', 
-         linewidth=2, label='Unfair Regressor (Combined)')
-
-plt.title(" Bias in Generated Data (Gaussian process regressor)", fontsize=14)
-plt.xlabel("Feature X")
-plt.ylabel("Target Y")
-
-# Legend
-plt.legend(frameon=True, loc='best')
-
-plt.tight_layout()
-plt.show()
 # %%
