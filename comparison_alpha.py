@@ -160,7 +160,7 @@ unaware_model =   OTUnawareFairRegressor(base_regressor= gp_reg, n_neighbors= 1,
 # %%
 
 
-alpha_list = np.linspace(0.3, 5, 6)
+alpha_list = np.linspace(0.1, 5, 8)
 alpha_len = len(alpha_list)
 results_means = np.zeros((alpha_len  , 3))
 results_stds =  np.zeros((alpha_len  , 3))
@@ -218,8 +218,7 @@ for idx, alpha in enumerate(alpha_list ):
     results_means_unfair[idx] = means 
     results_stds_unfair[idx] = stds 
 
-# %%
-alpha
+
 
 # %%
 results_means_aware_plug = np.zeros((alpha_len  , 3))
@@ -237,15 +236,6 @@ for idx, alpha in enumerate(alpha_list ):
 
     results_means_aware_plug[idx] = means 
     results_stds_aware_plug[idx] = stds 
-# %%
-alpha_list
-# %%
-plt.scatter(X, y, c = s)
-plt.plot()
-# %%
-
-# %%
-alpha_list
 # %%
 indicators = ['MSE', 'Wasserstein 2', 'KS Distance']
 colors = {'aware': '#1f77b4', 'unaware': '#ff7f0e', 'unfair': "#867AEC", 'aware_derived': "#4c7e15"}  # Blue and Orange

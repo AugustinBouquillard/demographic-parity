@@ -1,15 +1,34 @@
-# Evaluation of the performance and the fairness 
+# Evaluation of the performance and the fairness for different methods
+
+# methods include :
+# unfair GP regressor, aware(GP), unaware(GP + kNN), unaware(GP + krr), aware derived (with S predicted instead of true S)
+
+# unaware(GP + KNN) is kept as aware derived is kind of kNN with n = 2
+
+# alpha_0 = 2 fix 
 
 # For performance: MSE
 # For fairness : Wasserstein-2, KS (maximum difference between the CFD)
 # %%
 import numpy as np 
-from sklearn.metrics import mean_squared_error
 import ot
 from scipy.stats import ks_2samp
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import KFold
 
+import matplotlib.pyplot as plt
+from sklearn.base import BaseEstimator, RegressorMixin, clone
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+import scipy.stats as stats
+from OTAwareFairRegressor import OTAwareFairRegressor
+from sklearn.kernel_ridge import KernelRidge
+
+from OTUnawareFairRegressor import OTUnawareFairRegressor 
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF
 # %%
 def evaluation(y_unfair, y_fair, s_attr):
     """
@@ -52,8 +71,9 @@ def evaluation_cross_validation(k, model, X, y, s , prediction = None):
             model.fit(X_train, y_train, s_train)
         if prediction == "aware":
             y_pred = model.predict(X_test, s_test)
-        elif prediction == "unfair":
+        elif prediction == "unfair" or "plug_in":
             y_pred = model.predict(X_test)
+
         else : 
             y_pred = model.predict(X_test, prediction = prediction)
         mse, wass, ks = evaluation(y_test, y_pred, s_test) 
@@ -74,9 +94,7 @@ def evaluation_cross_validation(k, model, X, y, s , prediction = None):
 
 # %%
 
-from OTUnawareFairRegressor import OTUnawareFairRegressor 
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF
+
 
 def generate_linear_data(n , alpha_0, alpha_1, p = 0.3, x_scale = 1, noise_scale = 1, seed = 42):
     """
@@ -104,57 +122,40 @@ def generate_linear_data(n , alpha_0, alpha_1, p = 0.3, x_scale = 1, noise_scale
    
     return X, Y, S
 
-noise_scale = 0.3
-X, y, s = generate_linear_data(n = 1000, alpha_0 = 2, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
-kernel = 2 * RBF(length_scale=3.0, length_scale_bounds=(1e-2, 1e2))
-gp_reg = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9, alpha=noise_scale**2)
-ot_reg = OTUnawareFairRegressor(base_regressor= gp_reg)
-
-# print("fair unaware ot (gp + knn): ")
-# evaluation_cross_validation(10, ot_reg, X, y, s )
-# %%
-# %%
-# gamma with silverman rule
-h = np.std(y)*1000**(-0.2)*1.06
-print(h)
 # %%
 
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.base import BaseEstimator, RegressorMixin, clone
-from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
-import scipy.stats as stats
-from OTAwareFairRegressor import OTAwareFairRegressor
-from sklearn.kernel_ridge import KernelRidge
 
 noise_scale = 0.3
 X, y, s = generate_linear_data(n = 2000, alpha_0 = 2, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
+
+# gamma with silverman rule \approx 0.3
+h = np.std(y)*1000**(-0.2)*1.06
+print(h)
+
 kernel = 2 * RBF(length_scale=3.0, length_scale_bounds=(1e-2, 1e2))
 kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma = 0.3)
 
 gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2)
-
-
-
 
 print("unfair gp regressor: ")
 evaluation_cross_validation(5, gp_reg, X, y, s, prediction = "unfair")
 
 fair_derived_from_aware_model = OTAwareFairRegressor(base_estimator_model = gp_reg)
 
-print("fair aware ot (gp): ")
+print("fair aware (gp): ")
 evaluation_cross_validation(5, fair_derived_from_aware_model , X, y, s , prediction="aware")
 
 unaware_model =   OTUnawareFairRegressor(base_regressor= gp_reg, n_neighbors= 1, kernel_krr= kernel_krr )
 
-print("fair unaware ot (gp+knn): ")
+print("fair unaware (gp+knn): ")
 evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "knn" )
 
-print("fair unaware ot (gp+krr): ")
+print("fair unaware (gp+krr): ")
 evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "krr" )
+
+
+print("fair aware derived (gp): ")
+evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "plugin" )
 
 # %%
 
