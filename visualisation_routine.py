@@ -813,7 +813,8 @@ c_pos, c_neg = cmap(0), cmap(1)
 if len(histogram_data) == 1:
     axes = np.expand_dims(axes, axis=0)
 
-bins = 50
+# %%
+
 for idx, (alpha, data) in enumerate(histogram_data.items()):
     ax_unf = axes[idx, 0]
     ax_fair = axes[idx, 1]
@@ -822,7 +823,7 @@ for idx, (alpha, data) in enumerate(histogram_data.items()):
     mask_pos, mask_neg = data['mask_pos'], data['mask_neg']
     
   
-    
+    bins = 50
     # Plot Unfair Histograms
     ax_unf.hist(y_u[mask_pos], bins=bins, density=True, alpha=0.5, color=c_pos, label=r'S = 1')
     ax_unf.hist(y_u[mask_neg], bins=bins, density=True, alpha=0.5, color=c_neg, label=r'S = 2')
@@ -832,6 +833,7 @@ for idx, (alpha, data) in enumerate(histogram_data.items()):
         
         ax_unf.legend(loc='upper right')
     ax_unf.grid(axis='y', alpha=0.3)
+    
     
     # Plot Fair Histograms (Barycenter)
     ax_fair.hist(y_f[mask_pos], bins=bins, density=True, alpha=0.5, color=c_pos, label=r'Fair | S = 1')
@@ -1010,7 +1012,6 @@ c_pos, c_neg = cmap(0), cmap(1)
 if len(histogram_data) == 1:
     axes = np.expand_dims(axes, axis=0)
 
-bins = 50
 for idx, (alpha, data) in enumerate(histogram_data.items()):
     ax_unf = axes[idx, 0]
     ax_fair = axes[idx, 1]
@@ -1020,6 +1021,7 @@ for idx, (alpha, data) in enumerate(histogram_data.items()):
     
   
     
+    bins = 50
     # Plot Unfair Histograms
     ax_unf.hist(y_u[mask_pos], bins=bins, density=True, alpha=0.5, color=c_pos, label=r'S = 1')
     ax_unf.hist(y_u[mask_neg], bins=bins, density=True, alpha=0.5, color=c_neg, label=r'S = 2')
@@ -1030,6 +1032,7 @@ for idx, (alpha, data) in enumerate(histogram_data.items()):
         ax_unf.legend(loc='upper right')
     ax_unf.grid(axis='y', alpha=0.3)
     
+  
     # Plot Fair Histograms (Barycenter)
     ax_fair.hist(y_f[mask_pos], bins=bins, density=True, alpha=0.5, color=c_pos, label=r'Fair | S = 1')
     ax_fair.hist(y_f[mask_neg], bins=bins, density=True, alpha=0.5, color=c_neg, label=r'Fair | S = 2')
