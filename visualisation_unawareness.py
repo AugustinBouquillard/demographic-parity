@@ -519,7 +519,7 @@ from sklearn.kernel_ridge import KernelRidge
 kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma=0.3)
 from sklearn.ensemble import RandomForestRegressor
 
-regr_rf = RandomForestRegressor(max_depth=3, random_state=0)
+regr_rf = RandomForestRegressor(max_depth=4, random_state=0)
 
 ot_reg_gp = OTUnawareFairRegressor(base_regressor= gp_reg,kernel_krr=kernel_krr, n_neighbors= 5, random_forest=regr_rf)
 ot_reg_gp.fit(X_train, Y_train, S_train)
@@ -652,6 +652,183 @@ plot_fairness_correction(
     save_path="./results/fairness_correction_scatter_gp.png"
 )
 
+# %% 
+# plot histogram
+
+
+def plot_ks_hist(y_unfair, y_fair, s_attr, group_names=None, save_path=None,regressor_name = 'knn'):
+    """
+    Calculates W2 et KS statistics and plots distribution histograms for fair predictions.
+    
+    Parameters:
+    -----------
+   y_fair : array-like
+        Predictions from the fair (corrected) model.
+    s_attr : array-like
+        Sensitive attribute values (must contain exactly 2 unique groups).
+    group_names : list of str, optional
+        Custom names for the groups in the legend (e.g., ['Men', 'Women']).
+        If None, defaults to 'Group {val}'.
+    save_path : str, optional
+        If provided, saves the figure to this path (e.g., './results/plot.png').
+    """
+    
+    # 1. Setup Data & Groups
+
+    y_f = np.array(y_fair).flatten()
+    s = np.array(s_attr).flatten()
+    
+    # Automatically detect the two groups (e.g., 0/1 or 1/2)
+    groups = np.unique(s)
+    if len(groups) != 2:
+        raise ValueError(f"Expected exactly 2 groups in s_attr, found {len(groups)}: {groups}")
+    
+    g1, g2 = groups[0], groups[1]
+    
+    # Default group names if not provided
+    if group_names is None:
+        labels = [f'Group {g1}', f'Group {g2}']
+    else:
+        labels = group_names
+
+    # 2. Calculate KS Statistics
+    
+    # Fair
+    ks_fair = ks_2samp(y_f[s == g1], y_f[s == g2])
+    w2 = ot.lp. wasserstein_1d( y_f[s == g1], y_f[s == g2], np.ones_like(y_f[s == g1])/len(y_f[s == g1]),np.ones_like(y_f[s == g2])/len(y_f[s == g2]), p=2)
+    print(f"KS Distance (Fair):   {ks_fair.statistic:.4f} (p={ks_fair.pvalue:.4e})")
+
+    # 3. Visualization
+    fig, axes = plt.subplots(1, 1, figsize=(6, 4))
+    
+    # Define colors (Blue/Orange)
+    c1, c2 = 'tab:blue', 'tab:orange'
+    bins = 20
+    alpha = 0.6
+
+
+    axes.hist(y_f[s == g1], bins=bins, alpha=alpha, density=True, color=c1, label=labels[0])
+    axes.hist(y_f[s == g2], bins=bins, alpha=alpha, density=True, color=c2, label=labels[1])
+    
+    axes.set_title(f"fair regressor ({regressor_name})\n W2 : {w2:.3f}, KS Distance: {ks_fair.statistic:.3f}", fontsize=14)
+    axes.set_xlabel("Predicted Y", fontsize=12)
+    axes.set_ylabel("Density", fontsize=12)
+    axes.legend()
+    axes.grid(axis='y', linestyle=':', alpha=0.5)
+
+    # 4. Save and Show
+    if save_path:
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Plot saved to {save_path}")
+        
+    plt.show()
+
+plot_ks_hist(
+    y_unfair=y_gp, 
+    y_fair=y_gp_fair_rf, 
+    s_attr=S_test, 
+    group_names=['Majority (S=1)', 'Minority (S=2)'], # Optional custom labels
+    save_path="./results/generic_data_unaware_KS_gp_rf.png",
+    regressor_name= "random forest"
+)
+plot_ks_hist(
+    y_unfair=y_gp, 
+    y_fair=y_gp_fair_krr, 
+    s_attr=S_test, 
+    group_names=['Majority (S=1)', 'Minority (S=2)'], # Optional custom labels
+    save_path="./results/generic_data_unaware_KS_gp_rf.png",
+    regressor_name= "krr"
+)
+plot_ks_hist(
+    y_unfair=y_gp, 
+    y_fair=y_gp_fair_knn, 
+    s_attr=S_test, 
+    group_names=['Majority (S=1)', 'Minority (S=2)'], # Optional custom labels
+    save_path="./results/generic_data_unaware_KS_gp_rf.png",
+    regressor_name= "knn"
+)
+
+# %% 
+# plot unfair histogram 
+def plot_ks_hist_unfair(y_unfair, s_attr, group_names=None, save_path=None):
+    """
+    Calculates W2 et KS statistics and plots distribution histograms for fair predictions.
+    
+    Parameters:
+    -----------
+   y_unfair : array-like
+        Predictions from the unfair model.
+    s_attr : array-like
+        Sensitive attribute values (must contain exactly 2 unique groups).
+    group_names : list of str, optional
+        Custom names for the groups in the legend (e.g., ['Men', 'Women']).
+        If None, defaults to 'Group {val}'.
+    save_path : str, optional
+        If provided, saves the figure to this path (e.g., './results/plot.png').
+    """
+    
+    # 1. Setup Data & Groups
+
+    y_u = np.array(y_unfair).flatten()
+    s = np.array(s_attr).flatten()
+    
+    # Automatically detect the two groups (e.g., 0/1 or 1/2)
+    groups = np.unique(s)
+    if len(groups) != 2:
+        raise ValueError(f"Expected exactly 2 groups in s_attr, found {len(groups)}: {groups}")
+    
+    g1, g2 = groups[0], groups[1]
+    
+    # Default group names if not provided
+    if group_names is None:
+        labels = [f'Group {g1}', f'Group {g2}']
+    else:
+        labels = group_names
+
+    # 2. Calculate KS Statistics
+    
+    # unfair
+    ks_unfair = ks_2samp(y_u[s == g1], y_u[s == g2])
+    w2 = ot.lp. wasserstein_1d( y_u[s == g1], y_u[s == g2], np.ones_like(y_u[s == g1])/len(y_u[s == g1]),np.ones_like(y_u[s == g2])/len(y_u[s == g2]), p=2)
+    print(f"KS Distance (Unfair):   {ks_unfair.statistic:.4f}")
+
+    # 3. Visualization
+    fig, axes = plt.subplots(1, 1, figsize=(6, 4))
+    
+    # Define colors (Blue/Orange)
+    c1, c2 = 'tab:blue', 'tab:orange'
+    bins = 20
+    alpha = 0.6
+
+
+    axes.hist(y_u[s == g1], bins=bins, alpha=alpha, density=True, color=c1, label=labels[0])
+    axes.hist(y_u[s == g2], bins=bins, alpha=alpha, density=True, color=c2, label=labels[1])
+    
+    axes.set_title(f"unfair regressor \n W2 : {w2:.3f}, KS Distance: {ks_unfair.statistic:.3f}", fontsize=14)
+    axes.set_xlabel("Predicted Y", fontsize=12)
+    axes.set_ylabel("Density", fontsize=12)
+    axes.legend()
+    axes.grid(axis='y', linestyle=':', alpha=0.5)
+
+    # 4. Save and Show
+    if save_path:
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Plot saved to {save_path}")
+        
+    plt.show()
+
+plot_ks_hist_unfair(
+    y_unfair=y_gp, 
+
+    s_attr=S_test, 
+    group_names=['Majority (S=1)', 'Minority (S=2)'], # Optional custom labels
+    save_path="./results/generic_data_unaware_unfair.png"
+)
+
 # %%
 
 # Calculate KS Distance 
@@ -702,7 +879,7 @@ def plot_ks_comparison(y_unfair, y_fair, s_attr, group_names=None, save_path=Non
     print(f"KS Distance (Fair):   {ks_fair.statistic:.4f} (p={ks_fair.pvalue:.4e})")
 
     # 3. Visualization
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
     
     # Define colors (Blue/Orange)
     c1, c2 = 'tab:blue', 'tab:orange'
@@ -728,7 +905,6 @@ def plot_ks_comparison(y_unfair, y_fair, s_attr, group_names=None, save_path=Non
     axes[1].legend()
     axes[1].grid(axis='y', linestyle=':', alpha=0.5)
 
-    plt.suptitle("Impact of Fairness Correction on Prediction Distributions", fontsize=16, y=1.02)
     plt.tight_layout()
 
     # 4. Save and Show
