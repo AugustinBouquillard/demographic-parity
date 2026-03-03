@@ -49,8 +49,12 @@ def get_communities_data(as_df=False):
 
     S = df['race'].map(mapping) #sensitive attribute: S=1 for white, S=0 for non-white
     df = df.drop('race', axis=1)
+    
+    X_crime = df.replace('?', np.nan)
+    imputer = SimpleImputer(strategy='mean')
+    X_crime_clean = pd.DataFrame(imputer.fit_transform(X_crime), columns=X_crime.columns)
 
-    X = df.to_numpy() #features
+    X = X_crime_clean.to_numpy() #features
     
     if as_df: #for comparing with agarwal
         return df, S, y
