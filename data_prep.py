@@ -52,10 +52,13 @@ def get_communities_data(as_df=False):
     df = df.drop('race', axis=1)
     
     X_crime = df.replace('?', np.nan)
-    imputer = SimpleImputer(strategy='mean')
-    X_crime_clean = pd.DataFrame(imputer.fit_transform(X_crime), columns=X_crime.columns)
+    
+    #imputer = SimpleImputer(strategy='mean')
+    X_crime = X_crime.fillna(0)
+    #X_crime_clean = pd.DataFrame(imputer.fit_transform(X_crime), columns=X_crime.columns)
 
-    X = X_crime_clean.to_numpy() #features
+    X = X_crime.to_numpy()
+    #X = X_crime_clean.to_numpy() #features
     
     if as_df: #for comparing with agarwal
         return df, S, y
