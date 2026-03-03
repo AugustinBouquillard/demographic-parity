@@ -13,10 +13,11 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
     (find the barycenter and estimate the transport plan).
     """
     def __init__(self, base_regressor=None, base_classifier=None, n_neighbors=5, kernel_krr=KernelRidge(kernel='rbf', alpha=0.1, gamma=0.3), random_forest=RandomForestRegressor(max_depth=2)):
-        self.base_regressor = base_regressor if base_regressor else LinearRegression()
+        # FIXED: Explicitly use "is not None" to avoid calling __len__ on unfitted scikit-learn models
+        self.base_regressor = base_regressor if base_regressor is not None else LinearRegression()
         
         # Standard Logistic Regression (NO class_weight='balanced' to preserve true probabilities)
-        self.base_classifier = base_classifier if base_classifier else LogisticRegression(solver='liblinear')
+        self.base_classifier = base_classifier if base_classifier is not None else LogisticRegression(solver='liblinear')
         
         self.knn_ = KNeighborsRegressor(n_neighbors=n_neighbors)
         self.linear_mapping_plus = ot.da.LinearGWTransport()
