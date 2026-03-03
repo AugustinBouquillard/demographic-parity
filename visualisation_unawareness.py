@@ -517,11 +517,23 @@ plt.show()
 # Fair regresseur
 from sklearn.kernel_ridge import KernelRidge
 kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma=0.3)
-ot_reg_gp = OTUnawareFairRegressor(base_regressor= gp_reg,kernel_krr=kernel_krr, n_neighbors= 10)
+from sklearn.ensemble import RandomForestRegressor
+
+regr_rf = RandomForestRegressor(max_depth=3, random_state=0)
+
+ot_reg_gp = OTUnawareFairRegressor(base_regressor= gp_reg,kernel_krr=kernel_krr, n_neighbors= 5, random_forest=regr_rf)
 ot_reg_gp.fit(X_train, Y_train, S_train)
+
+# krr regressor
 y_gp_fair_krr = ot_reg_gp.predict(X_test, prediction= "krr")
 
+# knn regressor
 y_gp_fair_knn = ot_reg_gp.predict(X_test, prediction= "knn")
+
+# random forest regressor
+y_gp_fair_rf = ot_reg_gp.predict(X_test, prediction= "random_forest")
+
+
 
 def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
     """
@@ -632,7 +644,13 @@ plot_fairness_correction(
     s_attr=S_test, 
     save_path="./results/fairness_correction_scatter_gp.png"
 )
-
+plot_fairness_correction(
+    X=X_test, 
+    y_unfair=y_gp, 
+    y_fair=y_gp_fair_rf, 
+    s_attr=S_test, 
+    save_path="./results/fairness_correction_scatter_gp.png"
+)
 
 # %%
 
@@ -737,6 +755,13 @@ plot_ks_comparison(
     s_attr=S_test, 
     group_names=['Majority (S=1)', 'Minority (S=2)'], # Optional custom labels
     save_path="./results/generic_data_unaware_KS_gp_krr.png"
+)
+plot_ks_comparison(
+    y_unfair=y_gp, 
+    y_fair=y_gp_fair_rf, 
+    s_attr=S_test, 
+    group_names=['Majority (S=1)', 'Minority (S=2)'], # Optional custom labels
+    save_path="./results/generic_data_unaware_KS_gp_rf.png"
 )
 
 # %%
@@ -844,6 +869,13 @@ plot_fairness_shift(
 plot_fairness_shift(
     y_unfair = y_gp, 
     y_fair = y_gp_fair_knn, 
+    s_attr = S_test, 
+    delta = ot_reg_gp.delta_predict, 
+    n_samples = 50 
+)
+plot_fairness_shift(
+    y_unfair = y_gp, 
+    y_fair = y_gp_fair_rf, 
     s_attr = S_test, 
     delta = ot_reg_gp.delta_predict, 
     n_samples = 50 

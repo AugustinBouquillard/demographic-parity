@@ -8,6 +8,7 @@ from sklearn.preprocessing import StandardScaler
 from scipy.stats import ks_2samp
 from sklearn.kernel_ridge import KernelRidge
 from sklearn.pipeline import make_pipeline
+from sklearn.ensemble import RandomForestRegressor
 
 class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
     """
@@ -20,7 +21,7 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
     s = 1, majority, mu +  
     s = 2, minority, mu - 
     """
-    def __init__(self, base_regressor=None, base_classifier=None, n_neighbors=5,kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma=0.3)):
+    def __init__(self, base_regressor=None, base_classifier=None, n_neighbors=5,kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma=0.3), random_forest = RandomForestRegressor(max_depth=2)):
         self.base_regressor = base_regressor if base_regressor else LinearRegression() # fit_intercept is True by defaut
         self.base_classifier = base_classifier if base_classifier else LogisticRegression(solver='liblinear')
         
@@ -31,6 +32,8 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         self.scaler_ = StandardScaler()
 
         self.krr_ = kernel_krr
+        self.random_forest_ = random_forest
+
 
         self.eta_model_ = None
         self.delta_model_ = None
@@ -134,6 +137,9 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         # Fit krr
         self.krr_.fit(X_train_scaled, y_fair)
 
+        # Fit random forest
+        self.random_forest_.fit(X_train_scaled, y_fair)
+
         # Fit a linear mapping
         self.linear_mapping_plus.fit(Xs=self.h_plus, Xt=self.y_fair_plus)
         self.linear_mapping_minus.fit(Xs=self.h_minus, Xt= self.y_fair_minus)
@@ -168,7 +174,12 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
             
             pred_krr = self.krr_.predict(features_scaled)
             return pred_krr
-        
+        elif prediction == "random_forest":
+            features_new = np.column_stack((eta_new, delta_new))
+            features_scaled = self.scaler_.transform(features_new)
+    
+            pred_rf = self.random_forest_.predict(features_scaled)
+            return pred_rf 
         else : 
             # Predict via k-NN
             features_new = np.column_stack((eta_new, delta_new))
