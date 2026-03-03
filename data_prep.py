@@ -32,8 +32,9 @@ def get_adult_data(as_df=False):
 
 
 def get_communities_data(as_df=False):
+    df = fetch_ucirepo(id=183)
+    #df = pd.read_csv('./data/communities.csv')
     
-    df = pd.read_csv('./data/communities.csv')
     df = df.fillna(0)
 
     sens_attrs = ['racepctblack', 'racePctWhite', 'racePctAsian', 'racePctHisp']
