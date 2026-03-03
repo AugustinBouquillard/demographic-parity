@@ -223,6 +223,10 @@ ot_reg = OTUnawareFairRegressor()
 ot_reg.fit(X_train, Y_train, S_train)
 y_fair = ot_reg.predict(X_test, prediction= "knn")
 
+from OTAwareFairRegressor import OTAwareFairRegressor
+aware_model = OTAwareFairRegressor(LinearRegression()).fit(X_train, Y_train, S_train)
+y_fair_aware = aware_model.predict(X_test, S_test)
+
 
 def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
     """
@@ -646,6 +650,106 @@ plot_fairness_shift(
 
 
 # %%
+def plot_fairness_plan(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42):
+    """
+    Visualizes the shift from unfair to fair predictions using a transport map style,
+    alongside the initial conditional distributions and the final barycenter.
+    """
+    
+    # Standardize Inputs (Keep full arrays for accurate histograms)
+    y_u_full = np.array(y_unfair).flatten()
+    y_f_full = np.array(y_fair).flatten()
+    s_full = np.array(s_attr).flatten()
+    d_full = np.array(delta).flatten()
+    
+    unique_groups = np.unique(s_full)
+    
+    # Sampling for the scatter plot only (Optional)
+    if n_samples is not None and n_samples < len(y_u_full):
+        np.random.seed(seed)
+        indices = np.random.choice(len(y_u_full), n_samples, replace=False)
+        y_u, y_f, s, d = y_u_full[indices], y_f_full[indices], s_full[indices], d_full[indices]
+    else:
+        y_u, y_f, s, d = y_u_full, y_f_full, s_full, d_full
+
+    # Setup Colors (Blue & Orange)
+    cmap = plt.get_cmap('tab10')
+    c_blue = cmap(0)  
+    c_orange = cmap(1)
+    group_colors = {unique_groups[0]: c_blue, unique_groups[1]: c_orange}
+    point_colors = [group_colors[val] for val in s]
+
+    # --- Setup Figure and GridSpec ---
+    fig = plt.figure(figsize=(8, 3))
+    # Create two rows: top for histograms (height 1), bottom for scatter (height 2.5)
+    gs = fig.add_gridspec(1, 1)
+    
+    ax_scatter = fig.add_subplot(gs[0])
+
+   
+    # ==========================================
+    # 2. BOTTOM PANEL: Transport Map (Scatter)
+    # ==========================================
+    start_points = np.column_stack((y_u, d))
+    end_points = np.column_stack((y_f, np.zeros_like(d)))
+    
+    segments = np.stack((start_points, end_points), axis=1)
+    lc = LineCollection(segments, colors='gray', alpha=0.3, linewidths=0.8, zorder=0)
+    ax_scatter.add_collection(lc)
+    
+    # Unfair (Start) - Stars
+    ax_scatter.scatter(y_u, d, c=point_colors, s=60, marker='*', 
+                       alpha=0.8, edgecolors='white', linewidth=0.5, zorder=1)
+    
+    # Fair (End) - Circles (Projected onto y=0)
+    ax_scatter.scatter(y_f, np.zeros_like(d), c=point_colors, s=50, marker='o', 
+                       alpha=0.9, edgecolors='white', linewidth=0.5, zorder=2)
+
+    # Custom Legend for the bottom plot
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', label=f'Group {unique_groups[0]}',
+               markerfacecolor=c_blue, markersize=10),
+        Line2D([0], [0], marker='o', color='w', label=f'Group {unique_groups[1]}',
+               markerfacecolor=c_orange, markersize=10),
+        Line2D([0], [0], color='white', label=' '), 
+        Line2D([0], [0], marker='*', color='w', label='Unfair Prediction',
+               markerfacecolor='gray', markersize=12),
+        Line2D([0], [0], marker='o', color='w', label='Fair Prediction',
+               markerfacecolor='gray', markersize=10),
+    ]
+
+    ax_scatter.axhline(0, color='black', linestyle='-', linewidth=1, alpha=0.5)
+    ax_scatter.set_xlabel("Predicted Value ($y$)")
+    ax_scatter.set_ylabel(r"$\Delta(x)$ (Correction Cost)")
+    ax_scatter.legend(handles=legend_elements, loc='upper right', frameon=True)
+    ax_scatter.grid(alpha=0.2)
+    
+    fig.suptitle(f"Unawareness Fairness Correction Transport Map (Sampled {len(y_u)} points)", y=0.95)
+    
+    #plt.tight_layout()
+    plt.savefig("./results/generic_data_unaware_correction_line.png", dpi=300) 
+    plt.show()
+
+
+# Awareness as a special case of unawareness 
+plot_fairness_plan(
+    y_unfair = y_std, 
+    y_fair = y_fair_aware, 
+    s_attr = S_test, 
+    delta = S_test*4-6, 
+    n_samples = 100
+)
+# %%
+plot_fairness_plan(
+    y_unfair = y_std, 
+    y_fair = y_fair, 
+    s_attr = S_test, 
+    delta = ot_reg.delta_predict, 
+    n_samples = 100
+)
+
+
+
 # %%
 # %%
 from scipy.stats import wasserstein_distance
