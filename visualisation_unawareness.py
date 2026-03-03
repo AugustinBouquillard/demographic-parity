@@ -657,6 +657,7 @@ plot_fairness_correction(
 from OTAwareFairRegressor import OTAwareFairRegressor
 aware_model = OTAwareFairRegressor(gp_reg).fit(X_train, Y_train, S_train)
 y_fair_aware = aware_model.predict(X_test, S_test)
+y_fair_aware_derived = aware_model.predict(X_test)
 plot_fairness_correction(
     X=X_test, 
     y_unfair=y_gp, 
@@ -665,7 +666,76 @@ plot_fairness_correction(
     method_name="aware",
     save_path="./results/fairness_correction_scatter_gp.png"
 )
+plot_fairness_correction(
+    X=X_test, 
+    y_unfair=y_gp, 
+    y_fair=y_fair_aware_derived, 
+    s_attr=S_test, 
+    method_name="aware derived",
+    save_path="./results/fairness_correction_scatter_gp.png"
+)
 
+import sys
+import os
+current_dir = os.getcwd()
+#print(f"Notebook is running in: {current_dir}")
+
+folder_path = os.path.abspath(os.path.join(current_dir, 'unaware-fair-reg-3rd-method'))
+#print(f"Looking for module folder at: {folder_path}")
+#print(f"Does this folder exist? {os.path.exists(folder_path)}")
+
+if folder_path not in sys.path:
+    sys.path.insert(0, folder_path)
+from FairReg import FairReg
+
+# 1. Pre-fit the Base Regressor and the Proxy Classifier
+# FairReg requires these to be already fitted on the training data
+
+
+proxy_classifier = LogisticRegression()
+proxy_classifier.fit(X_train, S_train)
+
+# 2. Extract required parameters for FairReg
+# B: Bound on the target variable (max absolute value of y)
+B_val = np.max(np.abs(Y_train)) 
+
+# K: Number of sensitive attribute groups
+unique_groups = np.unique(S_train)
+K_val = len(unique_groups)
+
+# p: Frequencies of each sensitive group in the training data
+p_val = [np.mean(S_train == s) for s in unique_groups]
+
+# eps: Epsilon thresholds for demographic parity (tolerance for unfairness)
+eps_val = [0.00001 for _ in range(K_val)] 
+
+# T: Number of iterations for the stochastic gradient descent
+T_val = 1000000
+
+# 3. Initialize the FairReg model
+fair_reg_taturyan = FairReg(
+    base_method=gp_reg,
+    classifier=proxy_classifier,
+    B=B_val,
+    K=K_val,
+    p=p_val,
+    eps=eps_val,
+    T=T_val
+)
+
+# 4. Fit the fairness weights (w_est) using X_train
+fair_reg_taturyan.fit(X_train)
+
+# 5. Predict on the test set
+y_pred_taturyan = fair_reg_taturyan.predict(X_test)
+plot_fairness_correction(
+    X=X_test, 
+    y_unfair=y_gp, 
+    y_fair=y_pred_taturyan, 
+    s_attr=S_test, 
+    method_name="unaware taturyan",
+    save_path="./results/fairness_correction_scatter_gp.png"
+)
 
 # %% 
 # plot histogram
