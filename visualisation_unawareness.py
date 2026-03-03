@@ -535,7 +535,7 @@ y_gp_fair_rf = ot_reg_gp.predict(X_test, prediction= "random_forest")
 
 
 
-def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
+def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None, method_name="knn"):
     """
     Visualizes the correction from unfair to fair predictions with connecting lines.
     
@@ -577,7 +577,7 @@ def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
     colors = [c1 if s == s_val1 else c2 for s in s_flat]
 
 
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(6, 4))
     segments = np.column_stack((x_flat, y_std_flat, x_flat, y_fair_flat)).reshape(-1, 2, 2)
     lc = LineCollection(segments, colors='gray', alpha=0.3, linewidths=0.5, zorder=0)
     plt.gca().add_collection(lc)
@@ -612,7 +612,7 @@ def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
 
     plt.legend(handles=legend_elements, loc='best', frameon=True)
 
-    plt.title(f"Fairness Correction: Group S={s_val1} vs S={s_val2}", fontsize=14)
+    plt.title(f"Fairness Correction ({method_name})", fontsize=14)
     plt.xlabel("Feature (X)")
     plt.ylabel("Predicted Target (Y)")
 
@@ -642,6 +642,7 @@ plot_fairness_correction(
     y_unfair=y_gp, 
     y_fair=y_gp_fair_krr, 
     s_attr=S_test, 
+    method_name="krr",
     save_path="./results/fairness_correction_scatter_gp.png"
 )
 plot_fairness_correction(
@@ -649,8 +650,22 @@ plot_fairness_correction(
     y_unfair=y_gp, 
     y_fair=y_gp_fair_rf, 
     s_attr=S_test, 
+    method_name="random forest",
     save_path="./results/fairness_correction_scatter_gp.png"
 )
+
+from OTAwareFairRegressor import OTAwareFairRegressor
+aware_model = OTAwareFairRegressor(gp_reg).fit(X_train, Y_train, S_train)
+y_fair_aware = aware_model.predict(X_test, S_test)
+plot_fairness_correction(
+    X=X_test, 
+    y_unfair=y_gp, 
+    y_fair=y_fair_aware, 
+    s_attr=S_test, 
+    method_name="aware",
+    save_path="./results/fairness_correction_scatter_gp.png"
+)
+
 
 # %% 
 # plot histogram
