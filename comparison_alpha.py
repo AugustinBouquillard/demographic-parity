@@ -4,7 +4,7 @@
 # unfair GP regressor, aware(GP), unaware(GP + kNN), aware derived (with S predicted instead of true S)
 
 # For performance: MSE
-# For fairness : Wasserstein-2, KS (maximum difference between the CFD)
+# For fairness : Wasserstein-1, KS (maximum difference between the CFD)
 # %%
 import numpy as np 
 from sklearn.metrics import mean_squared_error
@@ -41,7 +41,7 @@ def evaluation(y_unfair, y_fair, s_attr):
     y_fair_2 = y_fair[s_attr == 2]
     a1 = np.ones_like(y_fair_1)/len(y_fair_1)
     a2 = np.ones_like(y_fair_2)/len(y_fair_2)
-    wass_dist = np.sqrt(ot.wasserstein_1d(y_fair_1, y_fair_2,a1, a2))
+    wass_dist = ot.wasserstein_1d(y_fair_1, y_fair_2,a1, a2)
     ks_dist = ks_2samp(y_fair_1, y_fair_2).statistic
 
     return mse, wass_dist, ks_dist
@@ -214,7 +214,7 @@ for idx, alpha in enumerate(alpha_list ):
     results_stds_aware_plug[idx] = stds 
 # %%
 
-indicators = ['MSE', 'Wasserstein 2', 'KS Distance']
+indicators = ['MSE', 'Wasserstein 1', 'KS Distance']
 colors = {'aware': '#1f77b4', 'unaware': '#ff7f0e', 'unfair': "#867AEC", 'aware_derived': "#4c7e15"}  # Blue and Orange
 
 fig, axes = plt.subplots(1, 3, figsize=(10, 3), sharex=True)

@@ -8,7 +8,7 @@
 # alpha_0 = 2 fix 
 
 # For performance: MSE
-# For fairness : Wasserstein-2, KS (maximum difference between the CFD)
+# For fairness : Wasserstein-1, KS (maximum difference between the CFD)
 # %%
 import numpy as np 
 import ot
@@ -42,7 +42,7 @@ def evaluation(y_unfair, y_fair, s_attr):
     y_fair_2 = y_fair[s_attr == 2]
     a1 = np.ones_like(y_fair_1)/len(y_fair_1)
     a2 = np.ones_like(y_fair_2)/len(y_fair_2)
-    wass_dist = np.sqrt(ot.wasserstein_1d(y_fair_1, y_fair_2,a1, a2))
+    wass_dist = ot.wasserstein_1d(y_fair_1, y_fair_2,a1, a2)
     ks_dist = ks_2samp(y_fair_1, y_fair_2).statistic
 
     return mse, wass_dist, ks_dist
@@ -160,4 +160,93 @@ evaluation_cross_validation(5, aware_derived_model , X, y, s, prediction = "plug
 
 # %%
 
+# Cross validation for Taturyan
 
+import sys
+import os
+current_dir = os.getcwd()
+#print(f"Notebook is running in: {current_dir}")
+
+folder_path = os.path.abspath(os.path.join(current_dir, 'unaware-fair-reg-3rd-method'))
+#print(f"Looking for module folder at: {folder_path}")
+#print(f"Does this folder exist? {os.path.exists(folder_path)}")
+
+if folder_path not in sys.path:
+    sys.path.insert(0, folder_path)
+from FairReg import FairReg
+
+# %% 
+
+def cross_validation_taturyan(k, X, y, s ):
+    """
+    Cross valisation on a dataset. For unaware regressor Taturyan.
+    """
+    y = y.reshape(-1, 1)
+   
+    spliter = KFold(n_splits=k, shuffle=True, random_state=42)
+
+    fold_mse = np.zeros(k)
+    fold_wass_dist = np.zeros(k)
+    fold_ks_dist = np.zeros(k)
+    
+    for fold, (train_index, test_index) in enumerate(spliter.split(X)):
+    
+        X_train, X_test = X[train_index], X[test_index]
+        y_train, y_test = y[train_index], y[test_index]
+        s_train, s_test = s[train_index], s[test_index]
+
+        proxy_classifier = LogisticRegression()
+        proxy_classifier.fit(X_train, s_train)
+        B_val = np.max(np.abs(y_train)) 
+
+        # K: Number of sensitive attribute groups
+        unique_groups = np.unique(s_train)
+        K_val = len(unique_groups)
+
+        # p: Frequencies of each sensitive group in the training data
+        p_val = [np.mean(s_train == s) for s in unique_groups]
+
+        # eps: Epsilon thresholds for demographic parity (tolerance for unfairness)
+        eps_val = [0.00001 for _ in range(K_val)] 
+
+        # T: Number of iterations for the stochastic gradient descent
+        T_val = 1000000
+
+        # 3. Initialize the FairReg model
+        fair_reg_taturyan = FairReg(
+            base_method=gp_reg,
+            classifier=proxy_classifier,
+            B=B_val,
+            K=K_val,
+            p=p_val,
+            eps=eps_val,
+            T=T_val
+        )
+
+        # 4. Fit the fairness weights (w_est) using X_train
+        fair_reg_taturyan.fit(X_train)
+
+        # 5. Predict on the test set
+        y_pred_taturyan = fair_reg_taturyan.predict(X_test)
+
+
+        mse, wass, ks = evaluation(y_test, y_pred_taturyan, s_test) 
+        
+        fold_mse[fold] = mse 
+        fold_wass_dist[fold] = wass 
+        fold_ks_dist[fold] = ks
+    
+    means = [np.mean(fold_mse), np.mean(fold_wass_dist), np.mean(fold_ks_dist)]
+    stds = [np.std(fold_mse), np.std(fold_wass_dist), np.std(fold_ks_dist)] 
+    formatted_means = [f"{m:.4f}" for m in means]
+    formatted_stds = [f"{s:.4f}" for s in stds]
+
+    print(f"Means: {formatted_means}")
+    print(f"Stds:  {formatted_stds}")
+    return means, stds
+
+
+# %% 
+cross_validation_taturyan(5,X, y, s )
+
+# %%

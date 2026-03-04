@@ -743,7 +743,7 @@ plot_fairness_correction(
 
 def plot_ks_hist(y_unfair, y_fair, s_attr, group_names=None, save_path=None,regressor_name = 'knn'):
     """
-    Calculates W2 et KS statistics and plots distribution histograms for fair predictions.
+    Calculates w1 et KS statistics and plots distribution histograms for fair predictions.
     
     Parameters:
     -----------
@@ -780,7 +780,7 @@ def plot_ks_hist(y_unfair, y_fair, s_attr, group_names=None, save_path=None,regr
     
     # Fair
     ks_fair = ks_2samp(y_f[s == g1], y_f[s == g2])
-    w2 = ot.lp. wasserstein_1d( y_f[s == g1], y_f[s == g2], np.ones_like(y_f[s == g1])/len(y_f[s == g1]),np.ones_like(y_f[s == g2])/len(y_f[s == g2]), p=2)
+    w1 = ot.lp. wasserstein_1d( y_f[s == g1], y_f[s == g2], np.ones_like(y_f[s == g1])/len(y_f[s == g1]),np.ones_like(y_f[s == g2])/len(y_f[s == g2]))
     print(f"KS Distance (Fair):   {ks_fair.statistic:.4f} (p={ks_fair.pvalue:.4e})")
 
     # 3. Visualization
@@ -795,7 +795,7 @@ def plot_ks_hist(y_unfair, y_fair, s_attr, group_names=None, save_path=None,regr
     axes.hist(y_f[s == g1], bins=bins, alpha=alpha, density=True, color=c1, label=labels[0])
     axes.hist(y_f[s == g2], bins=bins, alpha=alpha, density=True, color=c2, label=labels[1])
     
-    axes.set_title(f"fair regressor ({regressor_name})\n W2 : {w2:.3f}, KS Distance: {ks_fair.statistic:.3f}", fontsize=14)
+    axes.set_title(f"fair regressor ({regressor_name})\n w1 : {w1:.3f}, KS Distance: {ks_fair.statistic:.3f}", fontsize=14)
     axes.set_xlabel("Predicted Y", fontsize=12)
     axes.set_ylabel("Density", fontsize=12)
     axes.legend()
@@ -839,7 +839,7 @@ plot_ks_hist(
 # plot unfair histogram 
 def plot_ks_hist_unfair(y_unfair, s_attr, group_names=None, save_path=None):
     """
-    Calculates W2 et KS statistics and plots distribution histograms for fair predictions.
+    Calculates w1 et KS statistics and plots distribution histograms for fair predictions.
     
     Parameters:
     -----------
@@ -876,7 +876,7 @@ def plot_ks_hist_unfair(y_unfair, s_attr, group_names=None, save_path=None):
     
     # unfair
     ks_unfair = ks_2samp(y_u[s == g1], y_u[s == g2])
-    w2 = ot.lp. wasserstein_1d( y_u[s == g1], y_u[s == g2], np.ones_like(y_u[s == g1])/len(y_u[s == g1]),np.ones_like(y_u[s == g2])/len(y_u[s == g2]), p=2)
+    w1 = ot.lp. wasserstein_1d( y_u[s == g1], y_u[s == g2], np.ones_like(y_u[s == g1])/len(y_u[s == g1]),np.ones_like(y_u[s == g2])/len(y_u[s == g2]))
     print(f"KS Distance (Unfair):   {ks_unfair.statistic:.4f}")
 
     # 3. Visualization
@@ -891,7 +891,7 @@ def plot_ks_hist_unfair(y_unfair, s_attr, group_names=None, save_path=None):
     axes.hist(y_u[s == g1], bins=bins, alpha=alpha, density=True, color=c1, label=labels[0])
     axes.hist(y_u[s == g2], bins=bins, alpha=alpha, density=True, color=c2, label=labels[1])
     
-    axes.set_title(f"unfair regressor \n W2 : {w2:.3f}, KS Distance: {ks_unfair.statistic:.3f}", fontsize=14)
+    axes.set_title(f"unfair regressor \n W1 : {w1:.3f}, KS Distance: {ks_unfair.statistic:.3f}", fontsize=14)
     axes.set_xlabel("Predicted Y", fontsize=12)
     axes.set_ylabel("Density", fontsize=12)
     axes.legend()
