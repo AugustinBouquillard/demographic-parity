@@ -223,6 +223,8 @@ ot_reg = OTUnawareFairRegressor()
 ot_reg.fit(X_train, Y_train, S_train)
 y_fair = ot_reg.predict(X_test, prediction= "knn")
 
+
+# %%
 from OTAwareFairRegressor import OTAwareFairRegressor
 aware_model = OTAwareFairRegressor(LinearRegression()).fit(X_train, Y_train, S_train)
 y_fair_aware = aware_model.predict(X_test, S_test)
@@ -535,7 +537,6 @@ plot_fairness_shift(
 
 
 
-
 # %% 
 def plot_fairness_shift(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42):
     """
@@ -736,7 +737,7 @@ plot_fairness_plan(
     y_unfair = y_std, 
     y_fair = y_fair_aware, 
     s_attr = S_test, 
-    delta = S_test*4-6, 
+    delta = -S_test*4+6, 
     n_samples = 100
 )
 # %%

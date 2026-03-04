@@ -30,7 +30,7 @@ from OTUnawareFairRegressor import OTUnawareFairRegressor
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF
 # %%
-def evaluation(y_unfair, y_fair, s_attr):
+def evaluation(y_unfair, y_fair, s_attr, p = 1):
     """
     y is always 1D.
     Parameters:
@@ -42,12 +42,12 @@ def evaluation(y_unfair, y_fair, s_attr):
     y_fair_2 = y_fair[s_attr == 2]
     a1 = np.ones_like(y_fair_1)/len(y_fair_1)
     a2 = np.ones_like(y_fair_2)/len(y_fair_2)
-    wass_dist = ot.wasserstein_1d(y_fair_1, y_fair_2,a1, a2)
+    wass_dist = ot.wasserstein_1d(y_fair_1, y_fair_2,a1, a2, p = p)
     ks_dist = ks_2samp(y_fair_1, y_fair_2).statistic
 
     return mse, wass_dist, ks_dist
 
-def evaluation_cross_validation(k, model, X, y, s , prediction = None):
+def evaluation_cross_validation(k, model, X, y, s , prediction = None, p = 1):
     """
     Cross valisation on a dataset. 
     """
@@ -76,7 +76,7 @@ def evaluation_cross_validation(k, model, X, y, s , prediction = None):
 
         else : 
             y_pred = model.predict(X_test, prediction = prediction)
-        mse, wass, ks = evaluation(y_test, y_pred, s_test) 
+        mse, wass, ks = evaluation(y_test, y_pred, s_test, p =p) 
         
         fold_mse[fold] = mse 
         fold_wass_dist[fold] = wass 
@@ -121,6 +121,7 @@ def generate_linear_data(n , alpha_0, alpha_1, p = 0.3, x_scale = 1, noise_scale
     Y = - alpha_1*S + 0.5 * X.flatten() + np.random.normal(0, noise_scale, n)
    
     return X, Y, S
+
 
 # %%
 
@@ -177,7 +178,7 @@ from FairReg import FairReg
 
 # %% 
 
-def cross_validation_taturyan(k, X, y, s ):
+def cross_validation_taturyan(k, X, y, s , p = 1):
     """
     Cross valisation on a dataset. For unaware regressor Taturyan.
     """
@@ -195,8 +196,15 @@ def cross_validation_taturyan(k, X, y, s ):
         y_train, y_test = y[train_index], y[test_index]
         s_train, s_test = s[train_index], s[test_index]
 
+        kernel = 2 * RBF(length_scale=3.0, length_scale_bounds=(1e-2, 1e2))
+        
+        gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2).fit(X_train, y_train)
+        
+
         proxy_classifier = LogisticRegression()
         proxy_classifier.fit(X_train, s_train)
+
+        
         B_val = np.max(np.abs(y_train)) 
 
         # K: Number of sensitive attribute groups
@@ -230,7 +238,7 @@ def cross_validation_taturyan(k, X, y, s ):
         y_pred_taturyan = fair_reg_taturyan.predict(X_test)
 
 
-        mse, wass, ks = evaluation(y_test, y_pred_taturyan, s_test) 
+        mse, wass, ks = evaluation(y_test, y_pred_taturyan, s_test, p = p) 
         
         fold_mse[fold] = mse 
         fold_wass_dist[fold] = wass 
@@ -248,5 +256,45 @@ def cross_validation_taturyan(k, X, y, s ):
 
 # %% 
 cross_validation_taturyan(5,X, y, s )
+
+# %%
+
+# w2
+noise_scale = 0.3
+X, y, s = generate_linear_data(n = 2000, alpha_0 = 2, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
+
+# gamma with silverman rule \approx 0.3
+h = np.std(y)*1000**(-0.2)*1.06
+print(h)
+
+kernel = 2 * RBF(length_scale=3.0, length_scale_bounds=(1e-2, 1e2))
+kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma = 0.3)
+
+gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2)
+
+print("unfair gp regressor: ")
+evaluation_cross_validation(5, gp_reg, X, y, s, prediction = "unfair", p = 2)
+
+aware_model = OTAwareFairRegressor(base_estimator_model = gp_reg)
+
+print("fair aware (gp): ")
+evaluation_cross_validation(5, aware_model , X, y, s , prediction="aware", p = 2)
+
+unaware_model =   OTUnawareFairRegressor(base_regressor= gp_reg, n_neighbors= 2)
+
+print("fair unaware (gp+knn): ")
+evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "knn" , p = 2)
+
+unaware_krr_model =   OTUnawareFairRegressor(base_regressor= gp_reg, n_neighbors= 1, kernel_krr= kernel_krr )
+print("fair unaware (gp+krr): ")
+evaluation_cross_validation(5, unaware_krr_model , X, y, s, prediction = "krr", p = 2 )
+
+aware_derived_model = OTAwareFairRegressor(base_estimator_model = gp_reg)
+print("fair aware derived (gp): ")
+evaluation_cross_validation(5, aware_derived_model , X, y, s, prediction = "plugin", p = 2)
+
+print("unaware taturyan (gp): ")
+# W2 tatyuryan 
+cross_validation_taturyan(5,X, y, s , p = 2)
 
 # %%
