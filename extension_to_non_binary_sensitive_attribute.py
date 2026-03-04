@@ -6,10 +6,13 @@ import itertools
 import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error
 from sklearn.impute import SimpleImputer
 from scipy.stats import wasserstein_distance, ks_2samp
+from sklearn.base import clone
 from ucimlrepo import fetch_ucirepo 
 
 # Import Custom Models
@@ -29,7 +32,8 @@ class MultiClassOTUnawareFairRegressor:
     Heuristic One-vs-Rest extension for the binary OTUnawareFairRegressor.
     Trains K binary fair regressors (one for each class vs the rest) and averages predictions.
     """
-    def __init__(self):
+    def __init__(self, base_regressor=None):
+        self.base_regressor = base_regressor
         self.models = {}
         self.classes = None
 
@@ -40,8 +44,10 @@ class MultiClassOTUnawareFairRegressor:
             # Create binary sensitive attribute: 1 if class c, 0 otherwise
             S_binary = np.where(S == c, 1, 0)
             
-            # Initialize and fit a standard binary OT Unaware Regressor
-            model = OTUnawareFairRegressor()
+            # Initialize and fit a standard binary OT Unaware Regressor with the passed base model
+            model = OTUnawareFairRegressor(
+                base_regressor=clone(self.base_regressor) if self.base_regressor is not None else None
+            )
             model.fit(X, y, S_binary)
             self.models[c] = model
         return self
@@ -127,33 +133,43 @@ def main():
         X_, S_, y_, test_size=TEST_SIZE/(1-TRAIN_SIZE), stratify=S_, random_state=42
     )
     
-    X_train_arr, y_train_arr, S_train_arr = np.array(X_train), np.array(y_train).flatten(), np.array(S_train).flatten()
-    X_unlab_arr = np.array(X_unlab)
-    X_test_arr, y_test_arr, S_test_arr = np.array(X_test), np.array(y_test).flatten(), np.array(S_test).flatten()
+    # Scale Features to fix LogisticRegression convergence warnings
+    scaler = StandardScaler()
+    X_train_arr = scaler.fit_transform(X_train)
+    X_unlab_arr = scaler.transform(X_unlab)
+    X_test_arr  = scaler.transform(X_test)
+    
+    y_train_arr, S_train_arr = np.array(y_train).flatten(), np.array(S_train).flatten()
+    y_test_arr, S_test_arr = np.array(y_test).flatten(), np.array(S_test).flatten()
     
     print("\nTraining Multi-Class Sensitive Attribute Estimator (for Aware Plug-in)...")
-    clf_s = LogisticRegression(multi_class='multinomial', solver='lbfgs', max_iter=2000)
+    # Removed deprecated multi_class argument; kept lbfgs with scaled data
+    clf_s = LogisticRegression(solver='lbfgs', max_iter=2000)
     clf_s.fit(X_train_arr, S_train_arr)
     S_test_est = clf_s.predict(X_test_arr).flatten()
     
+    # Define our stronger base regressor
+    base_rf = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42)
+
     # --- Models ---
-    print("\nTraining Base Model (Unfair)...")
-    reg = LinearRegression()
+    print("\nTraining Base Model (Unfair Random Forest)...")
+    reg = clone(base_rf)
     reg.fit(X_train_arr, y_train_arr)
     y_pred_base = reg.predict(X_test_arr).flatten()
     
     print("Training Taturyan et al. (Minimax)...")
+    # Pass the already-fitted 'reg' model instead of an unfitted clone
     fair_reg = FairReg(reg, clf_s, B=1, K=4, p=p, eps=[0.00001]*4, T=100000, keep_history=False)
     fair_reg.fit(X_unlab_arr)
     y_pred_tat = fair_reg.predict(X_test_arr).flatten()
     
     print("Training OT Aware Fair Regressor (Plug-in)...")
-    ot_aware = OTAwareFairRegressor(base_estimator_model=LinearRegression())
+    ot_aware = OTAwareFairRegressor(base_estimator_model=clone(base_rf))
     ot_aware.fit(X_train_arr, y_train_arr, S_train_arr)
     y_pred_aware = ot_aware.predict(X_test_arr, S=S_test_est).flatten() 
 
     print("Training OT Unaware Fair Regressor (OvR Heuristic)...")
-    ot_unaware_multi = MultiClassOTUnawareFairRegressor()
+    ot_unaware_multi = MultiClassOTUnawareFairRegressor(base_regressor=clone(base_rf))
     ot_unaware_multi.fit(X_train_arr, y_train_arr, S_train_arr)
     y_pred_unaware = ot_unaware_multi.predict(X_test_arr, prediction="knn").flatten()
 
@@ -163,7 +179,7 @@ def main():
     print("=" * 90)
     
     predictions = {
-        "Base Model (Unfair)": y_pred_base,
+        "Base Model (Unfair RF)": y_pred_base,
         "Taturyan et al. (Minimax)": y_pred_tat,
         "OT Aware (Estimated S Plug-in)": y_pred_aware,
         "OT Unaware (OvR Heuristic)": y_pred_unaware
