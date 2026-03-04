@@ -221,7 +221,7 @@ plt.show()
 # Fair regresseur
 ot_reg = OTUnawareFairRegressor()
 ot_reg.fit(X_train, Y_train, S_train)
-y_fair = ot_reg.predict(X_test, prediction= "knn")
+y_fair = ot_reg.predict(X_test, prediction= "random_forest")
 
 
 # %%

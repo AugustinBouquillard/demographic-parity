@@ -19,12 +19,16 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         # Standard Logistic Regression (NO class_weight='balanced' to preserve true probabilities)
         self.base_classifier = base_classifier if base_classifier is not None else LogisticRegression(solver='liblinear')
         
-        self.knn_ = KNeighborsRegressor(n_neighbors=n_neighbors)
-        self.linear_mapping_plus = ot.da.LinearGWTransport()
-        self.linear_mapping_minus = ot.da.LinearGWTransport() 
+        self.knn_plus_ = KNeighborsRegressor(n_neighbors=n_neighbors)
+        self.knn_minus_ = KNeighborsRegressor(n_neighbors=n_neighbors) 
+        self.linear_mapping_plus_ = ot.da.LinearGWTransport()
+        self.linear_mapping_minus_ = ot.da.LinearGWTransport() 
         self.scaler_ = StandardScaler()
-        self.krr_ = kernel_krr
-        self.random_forest_ = random_forest
+        self.krr_plus_ = clone(kernel_krr)
+        self.krr_minus_ = clone(kernel_krr)
+
+        self.random_forest_plus_ = clone(random_forest)
+        self.random_forest_minus_ = clone(random_forest)
 
         self.eta_model_ = None
         self.delta_model_ = None
@@ -110,19 +114,24 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         ])
         y_fair = np.concatenate([y_fair_plus, y_fair_minus])
 
-        self.y_fair_plus = y_fair_plus.reshape(-1, 1)
-        self.y_fair_minus = y_fair_minus.reshape(-1, 1)
+        self.y_fair_plus = y_fair_plus.ravel()
+        self.y_fair_minus = y_fair_minus.ravel()
         self.h_plus = h1.reshape(-1, 1)
         self.h_minus = h2.reshape(-1, 1)
 
         # 8. Fit Mappings
-        X_train_scaled = self.scaler_.fit_transform(X_train_features)
-        self.knn_.fit(X_train_scaled, y_fair)
-        self.krr_.fit(X_train_scaled, y_fair)
-        self.random_forest_.fit(X_train_scaled, y_fair)
+       
+        self.knn_plus_.fit(self.h_plus, self.y_fair_plus)
+        self.knn_minus_.fit(self.h_minus, self.y_fair_minus)
 
-        self.linear_mapping_plus.fit(Xs=self.h_plus, Xt=self.y_fair_plus)
-        self.linear_mapping_minus.fit(Xs=self.h_minus, Xt=self.y_fair_minus)
+        self.krr_plus_.fit(self.h_plus, self.y_fair_plus)
+        self.krr_minus_.fit(self.h_minus, self.y_fair_minus)
+  
+        self.random_forest_plus_.fit(self.h_plus, self.y_fair_plus)
+        self.random_forest_minus_.fit(self.h_minus, self.y_fair_minus)
+
+        self.linear_mapping_plus_.fit(Xs=self.h_plus, Xt=self.y_fair_plus.reshape(-1, 1))
+        self.linear_mapping_minus_.fit(Xs=self.h_minus, Xt=self.y_fair_minus.reshape(-1, 1))
 
         return self
 
@@ -135,30 +144,53 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         ps = self.delta_model_.predict_proba(X)[:, 0]
         delta_new = (ps / self.p_s1_) - ((1 - ps) / self.p_s2_)
         self.delta_predict = delta_new
-       
+
+        pos_mask = delta_new >= 0
+        neg_mask = ~pos_mask  
+        
         if prediction == "linear":
+            if eta_new.ndim == 1:
+                eta_new = eta_new.reshape(-1, 1)
             pred_linear = np.zeros(len(X))
-            for idx, delta in enumerate(delta_new):
-                # FIXED: reshape(1, -1) for correct scikit-learn dimension
-                if delta >= 0:
-                    pred_linear[idx] = self.linear_mapping_plus.transform(self.eta_model_.predict(X[idx].reshape(1, -1)))[0][0]
-                else: 
-                    pred_linear[idx] = self.linear_mapping_minus.transform(self.eta_model_.predict(X[idx].reshape(1, -1)))[0][0]
+            if np.any(pos_mask):
+                pred_linear[pos_mask] = self.linear_mapping_plus_.transform(eta_new[pos_mask].reshape(-1, 1)).ravel()
+
+            if np.any(neg_mask):
+                pred_linear[neg_mask] = self.linear_mapping_minus_.transform(eta_new[neg_mask].reshape(-1, 1)).ravel()
+
             return pred_linear
             
         elif prediction == "krr":
-            features_new = np.column_stack((eta_new, delta_new))
-            features_scaled = self.scaler_.transform(features_new)
-            return self.krr_.predict(features_scaled)
+            pred_krr = np.zeros(len(X)) 
+             
+            if np.any(pos_mask):
+                pred_krr[pos_mask] = self.krr_plus_.predict(eta_new[pos_mask].reshape(-1, 1))
+
+            if np.any(neg_mask):
+                pred_krr[neg_mask] = self.krr_minus_.predict(eta_new[neg_mask].reshape(-1, 1))
+
+            return pred_krr
             
         elif prediction == "random_forest":
-            features_new = np.column_stack((eta_new, delta_new))
-            features_scaled = self.scaler_.transform(features_new)
-            return self.random_forest_.predict(features_scaled)
-            
+            pred_rf = np.zeros(len(X)) 
+             
+            if np.any(pos_mask):
+                pred_rf[pos_mask] = self.random_forest_plus_.predict(eta_new[pos_mask].reshape(-1, 1))
+
+            if np.any(neg_mask):
+                pred_rf[neg_mask] = self.random_forest_minus_.predict(eta_new[neg_mask].reshape(-1, 1))
+
+            return pred_rf
         else: 
-            features_new = np.column_stack((eta_new, delta_new))
-            features_scaled = self.scaler_.transform(features_new)
-            return self.knn_.predict(features_scaled)
+            pred_knn = np.zeros(len(X)) 
+             
+            if np.any(pos_mask):
+                pred_knn[pos_mask] = self.knn_plus_.predict(eta_new[pos_mask].reshape(-1, 1)).ravel()
+
+            if np.any(neg_mask):
+                pred_knn[neg_mask] = self.knn_minus_.predict(eta_new[neg_mask].reshape(-1, 1)).ravel()
+
+            return pred_knn
+            
         
 
