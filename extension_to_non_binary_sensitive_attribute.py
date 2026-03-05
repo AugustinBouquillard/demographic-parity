@@ -119,6 +119,44 @@ def calculate_max_fairness_violation(preds, S_test_arr):
             
     return max_w1, max_ks
 
+def plot_multiclass_histograms(predictions_dict, S_test_arr, y_test_arr):
+    """
+    Plots the prediction distributions split by the 4-class sensitive attribute S.
+    """
+    groups = np.unique(S_test_arr)
+    # Mapping based on the integers assigned in get_communities_data_multiclass
+    group_names = {0: 'Black', 1: 'White', 2: 'Asian', 3: 'Hispanic'}
+    
+    # Create a 2x2 grid for the 4 models
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12), sharex=True, sharey=True)
+    axes = axes.flatten()
+    
+    for idx, (name, preds) in enumerate(predictions_dict.items()):
+        ax = axes[idx]
+        
+        # Calculate metrics for the title
+        mse = mean_squared_error(y_test_arr, preds)
+        max_w1, max_ks = calculate_max_fairness_violation(preds, S_test_arr)
+        
+        # Plot a histogram for each sensitive group
+        for g in groups:
+            yp_g = preds[S_test_arr == g]
+            if len(yp_g) > 0:
+                ax.hist(yp_g, bins=25, density=True, alpha=0.5, 
+                        label=f'{group_names[g]}', edgecolor='white')
+        
+        # Formatting
+        ax.set_title(f"{name}\nMSE: {mse:.4f} | Max $W_1$: {max_w1:.4f} | Max KS: {max_ks:.4f}")
+        ax.set_xlabel("Predicted Violent Crimes Per Pop")
+        if idx % 2 == 0:
+            ax.set_ylabel("Density")
+        ax.legend(title="Majority Race")
+        ax.grid(axis='y', linestyle=':', alpha=0.6)
+        
+    plt.suptitle("Conditional Output Distributions by Majority Race (Communities & Crime)", fontsize=18, y=1.02)
+    plt.tight_layout()
+    plt.show()
+
 # --- Main Execution ---
 def main():
     print("Loading Communities & Crime data (Multi-class S)...")
@@ -190,6 +228,11 @@ def main():
         max_w1, max_ks = calculate_max_fairness_violation(preds, S_test_arr)
         print(f"{name:<35} | {mse:<10.4f} | {max_w1:<10.4f} | {max_ks:.4f}")
     print("=" * 90)
+    
+    # --- Visualization ---
+    print("\nPlotting multi-class prediction distributions...")
+    plot_multiclass_histograms(predictions, S_test_arr, y_test_arr)
+    
 
 if __name__ == "__main__":
     main()
