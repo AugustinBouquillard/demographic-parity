@@ -588,8 +588,8 @@ def plot_fairness_shift(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42
                  color=c_orange, label=f'Initial | S={unique_groups[1]}')
     
     # Barycenter distribution (Fair - target)
-    #ax_hist.hist(y_f_full, bins=40, density=True, histtype='step', 
-    #             linewidth=2, color='black', linestyle='--', label='Barycenter (Fair)')
+    ax_hist.hist(y_f_full, bins=40, density=True, histtype='step', 
+                 linewidth=2, color='black', linestyle='--', label='Barycenter (Fair)')
     
     ax_hist.set_ylabel("Density")
     ax_hist.legend(loc='upper right')
