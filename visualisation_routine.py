@@ -219,10 +219,14 @@ plt.show()
 
 #%%
 # Fair regresseur
+#ot_reg = OTUnawareFairRegressor()
+#ot_reg.fit(X_train, Y_train, S_train)
+#y_fair = ot_reg.predict(X_test, prediction= "random_forest")
+
+# Fair regresseur using Kernel Ridge Regression
 ot_reg = OTUnawareFairRegressor()
 ot_reg.fit(X_train, Y_train, S_train)
-y_fair = ot_reg.predict(X_test, prediction= "random_forest")
-
+y_fair = ot_reg.predict(X_test, prediction="linear_regression")
 
 # %%
 from OTAwareFairRegressor import OTAwareFairRegressor
@@ -532,7 +536,7 @@ plot_fairness_shift(
     y_fair = y_fair, 
     s_attr = S_test, 
     delta = ot_reg.delta_predict, 
-    n_samples = 50 
+    n_samples = 400
 )
 
 
@@ -738,7 +742,7 @@ plot_fairness_plan(
     y_fair = y_fair_aware, 
     s_attr = S_test, 
     delta = -S_test*4+6, 
-    n_samples = 100
+    n_samples = 50
 )
 
 # %%
@@ -753,7 +757,7 @@ from sklearn.model_selection import train_test_split
 # Setup the Experiment Parameters
 # base regressor : gp
 
-n_points = 2000  # LOT of points for smooth histograms
+n_points = 3000  # LOT of points for smooth histograms
 alphas =  [0.15, 1.5, 3.0]  # From no separability to perfect separability
 alphas_to_plot = alphas.copy()  # Specific alphas to visualize histograms for
 n_runs = 1  # Nombre de répétitions (générations) par valeur d'alpha -> 1 just pour histogram
