@@ -1,4 +1,4 @@
-# Evaluation of the impact of alpha_0
+# Evaluation (quantified) of the impact of alpha_0
 
 # methods include :
 # unfair GP regressor, aware(GP), unaware(GP + kNN), aware derived (with S predicted instead of true S)
@@ -135,6 +135,8 @@ noise_scale = 0.3
 # %%
 # run cross validation to get the changes of metrics with different alphas
 # unaware (gp + knn)
+
+print("unaware (gp + knn)") 
 for idx, alpha in enumerate(alpha_list ): 
 
 
@@ -148,11 +150,13 @@ for idx, alpha in enumerate(alpha_list ):
  
     unaware_model =   OTUnawareFairRegressor(base_regressor= gp_reg, n_neighbors= 5)
     
+    
     means, stds = evaluation_cross_validation(5, unaware_model , X, y, s, prediction = "knn" )
     results_means[idx] = means 
     results_stds[idx] = stds
 
 # aware 
+print("aware")
 for idx, alpha in enumerate(alpha_list ): 
     X, y, s = generate_linear_data(n = 2000, alpha_0 = alpha, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
 
@@ -161,7 +165,7 @@ for idx, alpha in enumerate(alpha_list ):
     gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2)
     fair_derived_from_aware_model = OTAwareFairRegressor(base_estimator_model = gp_reg) 
 
-
+    
     means, stds = evaluation_cross_validation(5, fair_derived_from_aware_model , X, y, s , prediction="aware")
 
     results_means_aware[idx] = means 
@@ -169,6 +173,7 @@ for idx, alpha in enumerate(alpha_list ):
 
 
 # unfair (gp)
+print("unfair (gp)")
 for idx, alpha in enumerate(alpha_list ): 
     X, y, s = generate_linear_data(n = 2000, alpha_0 = alpha, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
 
@@ -177,7 +182,7 @@ for idx, alpha in enumerate(alpha_list ):
     gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2)
    
 
-
+    
     means, stds = evaluation_cross_validation(5, gp_reg , X, y, s , prediction="unfair")
 
     results_means_unfair[idx] = means 
@@ -185,7 +190,7 @@ for idx, alpha in enumerate(alpha_list ):
 
 
 # aware (plug in)
-
+print("aware derived (S plug-in)")
 for idx, alpha in enumerate(alpha_list ): 
     X, y, s = generate_linear_data(n = 2000, alpha_0 = alpha, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
 
@@ -193,7 +198,7 @@ for idx, alpha in enumerate(alpha_list ):
 
     gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2)
     fair_derived_from_aware_model = OTAwareFairRegressor(base_estimator_model = gp_reg) 
-
+    
     means, stds = evaluation_cross_validation(5, fair_derived_from_aware_model , X, y, s , prediction="plugin")
 
     results_means_aware_plug[idx] = means 
@@ -253,159 +258,5 @@ for i, ax in enumerate(axes):
 
 plt.tight_layout()
 plt.show()
-
-# %%
-# histograms visualisation for some values of alpha
-# base regressor eta: linear
-
-n_points = 2000  # LOT of points for smooth histograms
-alphas =  [0.15, 1.5, 3.0]  # From no separability to perfect separability
-alphas_to_plot = alphas.copy()  # Specific alphas to visualize histograms for
-n_runs = 1  # run experiment once just for histogram
-noise_scale = 0.3
-histogram_data = {}
-
-
-mse_unfair_mean, mse_unfair_std = [], []
-mse_fair_mean, mse_fair_std = [], []
-w1_unfair_mean, w1_unfair_std = [], []
-w1_fair_mean, w1_fair_std = [], []
-
-print(f"Running experiment over alpha values with {n_runs} runs per alpha...")
-
-# Loop through different alpha (separability) values
-for alpha in alphas:
-    temp_mse_unf, temp_mse_fair = [], []
-    temp_w1_unf, temp_w1_fair = [], []
-    temp_ks_unf, temp_ks_fair = [], [] 
-
-    for run in range(n_runs):
-        X_exp, Y_exp, S_exp = generate_linear_data(
-            n=n_points, alpha_0=alpha, alpha_1=1, x_scale=1, noise_scale=noise_scale, seed=run + int(alpha*100)
-        )
-        
-        X_train_exp, X_test_exp, Y_train_exp, Y_test_exp, S_train_exp, S_test_exp = train_test_split(
-            X_exp, Y_exp, S_exp, train_size=0.8, random_state=run
-        )
-        
-        # Train Unfair Regressor
-        std_reg_exp = LinearRegression().fit(X_train_exp, Y_train_exp)
-        y_unfair_exp = std_reg_exp.predict(X_test_exp)
-        
-        
-        try:
-            # Train OT Unaware Fair Regressor
-            ot_reg_exp = OTUnawareFairRegressor()
-            ot_reg_exp.fit(X_train_exp, Y_train_exp, S_train_exp)
-            y_fair_exp = ot_reg_exp.predict(X_test_exp, prediction="knn")
-            delta_exp = ot_reg_exp.delta_predict
-            
-        except AssertionError:
-            # If proxy collapses because alpha is too low (no separability)
-            if run == 0:
-                print(f"Alpha {alpha:.2f}: Proxy collapsed (no separability). Using unfair baseline.")
-            y_fair_exp = y_unfair_exp.copy()
-            delta_exp = np.random.randn(len(y_fair_exp)) # Dummy delta
-            
-        # Split condition based on delta
-        mask_pos = (S_test_exp == 1)
-        mask_neg = (S_test_exp == 2)
-        
-        # Ensure we don't calculate Wasserstein on empty arrays
-        if sum(mask_pos) > 0 and sum(mask_neg) > 0:
-            w1_unf = wasserstein_distance(y_unfair_exp[mask_pos], y_unfair_exp[mask_neg])
-            w1_f = wasserstein_distance(y_fair_exp[mask_pos], y_fair_exp[mask_neg])
-            ks_unf = ks_2samp(y_unfair_exp[mask_pos], y_unfair_exp[mask_neg]).statistic 
-            ks_f = ks_2samp(y_fair_exp[mask_pos], y_fair_exp[mask_neg]).statistic 
-            
-        else:
-            w1_unf, w1_f = 0.0, 0.0
-        
-        temp_mse_unf.append(mean_squared_error(Y_test_exp, y_unfair_exp))
-        temp_mse_fair.append(mean_squared_error(Y_test_exp, y_fair_exp))
-        temp_w1_unf.append(w1_unf)
-        temp_w1_fair.append(w1_f)
-        temp_ks_unf.append(ks_unf)
-        temp_ks_fair.append(ks_f)
-        
-
-        if run == 0 and any(np.isclose(alpha, a, atol=0.1) for a in alphas_to_plot) and len(histogram_data) < len(alphas_to_plot):
-            histogram_data[alpha] = {
-                'y_u': y_unfair_exp, 'y_f': y_fair_exp, 
-                'mask_pos': mask_pos, 'mask_neg': mask_neg, 'w1_f': w1_f, 'ks_f': ks_f
-
-            }
-            
-    # Calculate Mean and Standard Deviation for the current alpha
-    mse_unfair_mean.append(np.mean(temp_mse_unf))
-    mse_unfair_std.append(np.std(temp_mse_unf))
-    
-    mse_fair_mean.append(np.mean(temp_mse_fair))
-    mse_fair_std.append(np.std(temp_mse_fair))
-    
-    w1_unfair_mean.append(np.mean(temp_w1_unf))
-    w1_unfair_std.append(np.std(temp_w1_unf))
-    
-    w1_fair_mean.append(np.mean(temp_w1_fair))
-    w1_fair_std.append(np.std(temp_w1_fair))
-
-
-# %%
-# plot
-
-alphas = np.array(alphas)
-mse_unfair_mean, mse_unfair_std = np.array(mse_unfair_mean), np.array(mse_unfair_std)
-mse_fair_mean, mse_fair_std = np.array(mse_fair_mean), np.array(mse_fair_std)
-w1_unfair_mean, w1_unfair_std = np.array(w1_unfair_mean), np.array(w1_unfair_std)
-w1_fair_mean, w1_fair_std = np.array(w1_fair_mean), np.array(w1_fair_std)
-
-print("Experiment complete. Plotting results...")
-
-# Plot Smooth Histograms for specific Alphas
-fig, axes = plt.subplots(len(histogram_data), 2, figsize=(10, 2 * len(histogram_data)), sharex=False, sharey=False)
-
-cmap = plt.get_cmap('tab10')
-c_pos, c_neg = cmap(0), cmap(1)
-
-if len(histogram_data) == 1:
-    axes = np.expand_dims(axes, axis=0)
-
-for idx, (alpha, data) in enumerate(histogram_data.items()):
-    ax_unf = axes[idx, 0]
-    ax_fair = axes[idx, 1]
-    
-    y_u, y_f = data['y_u'], data['y_f']
-    mask_pos, mask_neg = data['mask_pos'], data['mask_neg']
-
-    bins = 50
-
-    
-    # Plot Unfair Histograms
-    ax_unf.hist(y_u[mask_pos], bins=bins, density=True, alpha=0.5, color=c_pos, label=r'S = 1')
-    ax_unf.hist(y_u[mask_neg], bins=bins, density=True, alpha=0.5, color=c_neg, label=r'S = 2')
-    ax_unf.set_title(r"Unfair Predictions ($\alpha_0 = %.1f$)" % alpha)
-    ax_unf.set_ylabel("Density")
-    if idx == 0 :
-        
-        ax_unf.legend(loc='upper right')
-    ax_unf.grid(axis='y', alpha=0.3)
-    
-  
-    # Plot Fair Histograms (Barycenter)
-    ax_fair.hist(y_f[mask_pos], bins=bins, density=True, alpha=0.5, color=c_pos, label=r'Fair | S = 1')
-    ax_fair.hist(y_f[mask_neg], bins=bins, density=True, alpha=0.5, color=c_neg, label=r'Fair | S = 2')
-    
-    # Adding an outline for the overall barycenter distribution
-    ax_fair.hist(y_f, bins=bins, density=True, histtype='step', linewidth=2, color='black', linestyle='--', label='Overall Barycenter')
-    
-    ax_fair.set_title(r"Fair Predictions ($\alpha_0 = %.1f$) | $W_1 = %.4f$ | KS = %.4f" % (alpha, data['w1_f'], data['ks_f']))
-    if idx == 0 :
-        ax_fair.legend(loc='upper right')
-    ax_fair.grid(axis='y', alpha=0.3)
-
-plt.suptitle("Distributions Before and After Fairness Correction (linear base regressor)", fontsize=16, y=1.02)
-plt.tight_layout()
-plt.show()
-
 
 # %%
