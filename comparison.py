@@ -9,7 +9,7 @@
 
 # For performance: MSE
 # For fairness : Wasserstein-1/2, KS (maximum difference between the CFD)
-
+# the code takes some time to run
 
 # %%
 import numpy as np 

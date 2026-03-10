@@ -713,10 +713,10 @@ w1_fair_mean, w1_fair_std = np.array(w1_fair_mean), np.array(w1_fair_std)
 
 print("Experiment complete. Plotting results...")
 
-# 3. Plot Metrics (MSE and Wasserstein Distance) with Confidence Intervals
+# Plot Metrics (MSE and Wasserstein Distance) with Confidence Intervals
 fig, axes = plt.subplots(1, 2, figsize=(10, 3))
 
-# --- MSE Plot ---
+# MSE Plot
 axes[0].plot(alphas, mse_unfair_mean, marker='o', linestyle='--', color='gray', label='Unfair Regressor')
 axes[0].fill_between(alphas, mse_unfair_mean - mse_unfair_std, mse_unfair_mean + mse_unfair_std, color='gray', alpha=0.2)
 
@@ -729,7 +729,7 @@ axes[0].set_ylabel("MSE")
 axes[0].grid(True, linestyle=':', alpha=0.6)
 axes[0].legend()
 
-# --- Wasserstein Distance Plot ---
+# Wasserstein Distance Plot 
 axes[1].plot(alphas, w1_unfair_mean, marker='o', linestyle='--', color='gray', label='Unfair Regressor')
 axes[1].fill_between(alphas, w1_unfair_mean - w1_unfair_std, w1_unfair_mean + w1_unfair_std, color='gray', alpha=0.2)
 
@@ -747,7 +747,7 @@ plt.tight_layout()
 plt.show()
 
 
-# 4. Plot Smooth Histograms for specific Alphas
+# Plot Smooth Histograms for specific Alphas
 fig, axes = plt.subplots(len(histogram_data), 2, figsize=(10, 2 * len(histogram_data)), sharex=False, sharey=False)
 
 cmap = plt.get_cmap('tab10')

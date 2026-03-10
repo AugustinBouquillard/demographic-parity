@@ -2,6 +2,7 @@
 # and test differents base regresseurs/ mapping estimation
 # visualisation step by step
 
+# the "test Taturyan" part takes some time to run
 #%%
 
 import numpy as np
