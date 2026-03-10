@@ -6,6 +6,8 @@
 # For performance: MSE
 # For fairness : Wasserstein-1, KS (maximum difference between the CFD)
 
+# the code takes some time to run
+
 # %%
 import numpy as np 
 from sklearn.metrics import mean_squared_error

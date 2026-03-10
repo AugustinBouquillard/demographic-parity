@@ -1,5 +1,6 @@
 # Visualize the data of each step during 
 # the construction of OT fair unaware regressor 
+# as well as a visualisation with histogram with different alpha_0
 # This file serves like a visualisation template
 
 #%%

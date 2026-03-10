@@ -7,7 +7,7 @@ In OTAwareFairRegressor.py we implemented the awareness method of Chzhen et al. 
 The unaware-fair-reg-third-method folder comes from the code of the paper by Taturyan et al. "Regression under demographic parity constraints via
 unlabeled post-processing" and contains the files necessary (in particular FairReg.py) to use their method, which relaxes the demographic parity constraint to use convex optimization.
 
-We obtained the visualizations in our slides with the following files : visualization_unawareness.py, visualization_routine.py, toy_example_visualization.ipynb, comparison.py, comparison_alpha.py for our generated data experiments as well as data_prep.py for preparation of "real world" datasets and the notebook real_world_data_visualization.ipynb for different model performance comparisons on the Communities and Crime and the Adult datasets. We explain in more details the use of the file at the beginning of the file.
+We obtained the visualizations in our slides with the following files : visualization_unawareness.py, visualization_routine.py, toy_example_visualization.ipynb, comparison.py, comparison_alpha.py for our generated data experiments as well as data_prep.py for preparation of "real world" datasets and the notebook real_world_data_visualization.ipynb for different model performance comparisons on the Communities and Crime and the Adult datasets. We explain in more details the use of the file at the beginning of each file.
 
 A naive extension of Divol and Gaucher's method to the case of a non-binary sensitive attribute and a comparison of all models on the Communities and Crime dataset with the four different communities as the sensitive attribute S is given in extension_to_non_binary_sensitive_attribute.py
 
