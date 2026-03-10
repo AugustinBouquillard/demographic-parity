@@ -9,8 +9,7 @@ from sklearn.ensemble import RandomForestRegressor
 
 class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
     """
-    Implements Fair Regression via optimal transport 
-    (find the barycenter and estimate the transport plan).
+    Implementing fair regression via optimal transport according to Divol and Gaucher method
     """
     def __init__(self, base_regressor=None, base_classifier=None, n_neighbors=5, kernel_krr=KernelRidge(kernel='rbf', alpha=0.1, gamma=0.3), random_forest=RandomForestRegressor(max_depth=2)):
         self.base_regressor = base_regressor if base_regressor is not None else LinearRegression()
@@ -52,7 +51,7 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
             raise ValueError(f"Expected exactly 2 sensitive groups, found {len(classes)}.")
         self.s1_, self.s2_ = classes[0], classes[1]
 
-        #fitting Bayesian Models
+        #fitting bayesian (unfair) model
         self.eta_model_ = clone(self.base_regressor).fit(X, y)
         eta_train = self.eta_model_.predict(X)
 
@@ -62,10 +61,8 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         
         self.delta_model_ = clone(self.base_classifier).fit(X, s)
         
-        #P(S=s1 | X)
+        #estimating P(S=s1 | X) and DELTA
         ps_pred = self.delta_model_.predict_proba(X)[:, 0]
-        
-        #Delta
         delta_vals = (ps_pred / self.p_s1_) - ((1 - ps_pred) / self.p_s2_)
 
         #splitting according to delta
@@ -81,7 +78,7 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         n1 = len(h1)
         n2 = len(h2)
 
-        #Cost Matrix for OT
+        #cost matrix for OT
         d1 = np.abs(delta_vals[idx_plus])
         d2 = np.abs(delta_vals[idx_minus])
         numer = (h1[:, None] - h2[None, :]) ** 2
@@ -133,7 +130,7 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
 
         eta_new = self.eta_model_.predict(X)
         
-        # Extract P(S=s1 | X)
+        #extracting P(S=s1 | X)
         ps = self.delta_model_.predict_proba(X)[:, 0]
         delta_new = (ps / self.p_s1_) - ((1 - ps) / self.p_s2_)
         self.delta_predict = delta_new
@@ -174,7 +171,7 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
                 pred_rf[neg_mask] = self.random_forest_minus_.predict(eta_new[neg_mask].reshape(-1, 1))
 
             return pred_rf
-        else: 
+        else:
             pred_knn = np.zeros(len(X)) 
              
             if np.any(pos_mask):

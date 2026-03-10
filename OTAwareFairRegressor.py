@@ -2,21 +2,16 @@ import numpy as np
 from sklearn.base import clone
 from sklearn.linear_model import LogisticRegression
 
-#trouver les quantiles, interpoler cf. fonction interp en python
+# NB: trouver les quantiles, puis pour évaluer dans les autres groupes interpoler avec la fonction np.interp
 
 class OTAwareFairRegressor:
     """
-    Optimal Fair Regressor using Wasserstein Barycenters.
-    Trains a base estimator and transforms its outputs to satisfy Demographic Parity following the method from Chzhen et al. "Fair Regression with Wasserstein Barycenters".
+    Optimal Fair Regressor using the Wasserstein 2 barycenter between conditional Y distributions depending on their sensitive attributes.
+    We first train a base estimator (unfair) and then correct its outputs to satisfy the Demographic Parity criterion following the method from Chzhen et al. "Fair Regression with Wasserstein Barycenters".
     """
     def __init__(self, base_estimator_model, proxy_estimator=None, sigma=1e-5):
-        """
-        base_estimator_model: an unfitted machine learning model (e.g., RandomForestRegressor()).
-        proxy_estimator: also known as DELTA. An unfitted proxy estimator for estimating group-specific conditional expectations.
-        sigma: jitter parameter for uniform noise to break ties.
-        """
-        self.base_estimator = clone(base_estimator_model)
-        self.sigma = sigma
+        self.base_estimator = clone(base_estimator_model) #unfitted machine learning model (for instance a RandomForestRegressor()).
+        self.sigma = sigma #jitter parameter for uniform noise to break ties, which is required according to Chzhen et al.
         self.p_hat = {}
         self.ar0 = {}
         self.ar1 = {}
@@ -24,36 +19,32 @@ class OTAwareFairRegressor:
         if proxy_estimator is None:
             self.proxy_estimator = LogisticRegression()
         else:
-            self.proxy_estimator = proxy_estimator
+            self.proxy_estimator = proxy_estimator #unfitted proxy estimator for estimating group-specific conditional expectations, also called DELTA.
 
     def fit(self, X_train, y_train, S_train, X_unlabeled=None, S_unlabeled=None):
         """
         Trains the base estimator and calibrates the Wasserstein fair transformation.
         """
         self.proxy_estimator.fit(X_train, S_train)
-
-        #base estimator \hat{f} on labeled data 
         X_S_train_combined = np.column_stack((X_train, S_train))
-        self.base_estimator.fit(X_S_train_combined, y_train)
-
-        #unlabeled data \mathcal{U} for calibration 
+        self.base_estimator.fit(X_S_train_combined, y_train) 
         X_calib = X_train if X_unlabeled is None else X_unlabeled
         S_calib = S_train if S_unlabeled is None else S_unlabeled
 
         self.groups, counts = np.unique(S_calib, return_counts=True)
         n_total = len(S_calib)
         
-        #empirical frequencies \hat{p}_s 
+        #empirical frequencies 
         self.p_hat = {s: count / n_total for s, count in zip(self.groups, counts)}
         
         for s in self.groups:
             X_s = X_calib[S_calib == s]
-            #splitting data into two equal parts
+            #splitting data into 2 parts
             half = len(X_s) // 2
             X_s_0, X_s_1 = X_s[:half], X_s[half:]
             XS_0 = np.column_stack((X_s_0, np.full(len(X_s_0), s)))
             XS_1 = np.column_stack((X_s_1, np.full(len(X_s_1), s)))
-            #predicting and apply uniform jitter to break potential ties 
+            #predicting and applying uniform jitter to break potential ties 
             pred_0 = self.base_estimator.predict(XS_0)
             pred_1 = self.base_estimator.predict(XS_1)
             
@@ -67,7 +58,7 @@ class OTAwareFairRegressor:
     def predict(self, X, S=None):
         predictions = np.zeros(len(X))
         #if S is missing, we use the proxy estimator to guess the classes
-        if S is None:
+        if S is None: #this is the awareness-derived case with S hat plugged in
             S = self.proxy_estimator.predict(X)
 
         for s in self.groups:
@@ -102,15 +93,10 @@ class OTAwareFairRegressor:
         return predictions
     
 
+        #the folloxing was an attempt of extending the plug in method to take into account not only the sign of DELTA but also its magnitude, i.e. using probabilities of belonging to each group.
+        #we ended up not using it.
         """
         def predict(self, X, S=None):
-
-        #Generates fair predictions using vectorized optimal transport mapping.
-        
-        #X: Input features.
-        #S: Exact sensitive attributes (for the Awareness context). 
-        #   If None, uses the proxy estimator (Unawareness context).
-
         predictions = np.zeros(len(X))
 
         if S is not None:
@@ -120,15 +106,13 @@ class OTAwareFairRegressor:
                 if not np.any(mask): 
                     continue
                 
-                # Predicting base values for all items in this group at once
                 #XS = np.column_stack((X[mask], S[mask]))
                 #f_val = self.base_estimator.predict(XS)
                 #f_val += np.random.uniform(-self.sigma, self.sigma, size=np.sum(mask))
                 
-                # Vectorized searchsorted
                 #k_s = np.searchsorted(self.ar1[s], f_val)
                 
-                # Calculating Barycenter mapping
+                #calculating barycenter
                 #g_hat = np.zeros(np.sum(mask))
                 #for s_prime in self.groups:
                 #    ar0_sp = self.ar0[s_prime]
@@ -143,13 +127,12 @@ class OTAwareFairRegressor:
                 #predictions[mask] = g_hat
                 
                 
-                # Vectorized searchsorted to find the rank
+                #searchsorting to find the rank
                 k_s = np.searchsorted(self.ar1[s], f_val)
                 
-                # Convert the rank into a quantile (percentage between 0.0 and 1.0)
+                #converting the rank into a quantile (percentage between 0.0 and 1.0)
                 q = k_s / len(self.ar1[s])
                 
-                # Calculating Barycenter mapping
                 g_hat = np.zeros(len(f_val))
                 for s_prime in self.groups:
                     ar0_sp = self.ar0[s_prime]
@@ -169,7 +152,6 @@ class OTAwareFairRegressor:
             delta = self.proxy_estimator.predict_proba(X)
             expected_g = np.zeros(len(X))
             
-            # Looping through the classes that the proxy estimator learned
             for j, s in enumerate(self.proxy_estimator.classes_):
                 if s not in self.groups:
                     continue
@@ -193,13 +175,12 @@ class OTAwareFairRegressor:
                 #    g_hat_s += self.p_hat[s_prime] * ar0_sp[idx]
 
                 
-                # Vectorized searchsorted to find the rank
+                #finding the rank
                 k_s = np.searchsorted(self.ar1[s], f_val)
                 
-                # Convert the rank into a quantile (percentage between 0.0 and 1.0)
+                #making the rank into a quantile (percentage between 0.0 and 1.0)
                 q = k_s / len(self.ar1[s])
                 
-                # Calculating Barycenter mapping
                 g_hat_s = np.zeros(len(f_val))
                 for s_prime in self.groups:
                     ar0_sp = self.ar0[s_prime]
@@ -207,12 +188,12 @@ class OTAwareFairRegressor:
                     
                     target_q = np.linspace(0, 1, n_sp)
                     
-                    # We evaluate the target values (ar0_sp) at the specific quantiles (q) with np.interp 
+                    #We evaluate the target values (ar0_sp) at the specific quantiles (q) with np.interp 
                     mapped_values = np.interp(q, target_q, ar0_sp)
                     
                     g_hat_s += self.p_hat[s_prime] * mapped_values
                 
-                # Multiplying the hypothetical fair prediction by the probability that the point actually belongs to group 's'
+                #multiplying the hypothetical fair prediction by the probability that the point actually belongs to group 's'
                 expected_g += delta[:, j] * g_hat_s
             
                 
