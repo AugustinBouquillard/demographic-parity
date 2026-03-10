@@ -8,7 +8,9 @@
 # alpha_0 = 2 fix 
 
 # For performance: MSE
-# For fairness : Wasserstein-1, KS (maximum difference between the CFD)
+# For fairness : Wasserstein-1/2, KS (maximum difference between the CFD)
+
+
 # %%
 import numpy as np 
 import ot
@@ -29,9 +31,12 @@ from sklearn.kernel_ridge import KernelRidge
 from OTUnawareFairRegressor import OTUnawareFairRegressor 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF
+import sys
+import os
 # %%
 def evaluation(y_unfair, y_fair, s_attr, p = 1):
     """
+    Evaluate mse, wass_p, ks distance.
     y is always 1D.
     Parameters:
     s_attr : S = 1 (majority) or 2 (minority) 
@@ -94,8 +99,6 @@ def evaluation_cross_validation(k, model, X, y, s , prediction = None, p = 1):
 
 # %%
 
-
-
 def generate_linear_data(n , alpha_0, alpha_1, p = 0.3, x_scale = 1, noise_scale = 1, seed = 42):
     """
     Generate 1D linear data.  
@@ -126,14 +129,16 @@ def generate_linear_data(n , alpha_0, alpha_1, p = 0.3, x_scale = 1, noise_scale
 # %%
 
 
+# Cross-validation for different methods (mse, wass_1, ks)
+
+
 noise_scale = 0.3
 X, y, s = generate_linear_data(n = 2000, alpha_0 = 2, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
 
-# gamma with silverman rule \approx 0.3
-h = np.std(y)*1000**(-0.2)*1.06
-print(h)
-
 kernel = 2 * RBF(length_scale=3.0, length_scale_bounds=(1e-2, 1e2))
+
+# gamma with silverman rule \approx 0.3 for krr
+h = np.std(y)*1000**(-0.2)*1.06 
 kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma = 0.3)
 
 gp_reg = GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer=10, alpha=2*noise_scale**2)
@@ -159,12 +164,7 @@ aware_derived_model = OTAwareFairRegressor(base_estimator_model = gp_reg)
 print("fair aware derived (gp): ")
 evaluation_cross_validation(5, aware_derived_model , X, y, s, prediction = "plugin" )
 
-# %%
 
-# Cross validation for Taturyan
-
-import sys
-import os
 current_dir = os.getcwd()
 #print(f"Notebook is running in: {current_dir}")
 
@@ -176,7 +176,6 @@ if folder_path not in sys.path:
     sys.path.insert(0, folder_path)
 from FairReg import FairReg
 
-# %% 
 
 def cross_validation_taturyan(k, X, y, s , p = 1):
     """
@@ -254,18 +253,15 @@ def cross_validation_taturyan(k, X, y, s , p = 1):
     return means, stds
 
 
-# %% 
+print("fair unaware taturyan: ")
 cross_validation_taturyan(5,X, y, s )
 
 # %%
 
-# w2
+# crosse validation (mse, wass_2, ks)
+
 noise_scale = 0.3
 X, y, s = generate_linear_data(n = 2000, alpha_0 = 2, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
-
-# gamma with silverman rule \approx 0.3
-h = np.std(y)*1000**(-0.2)*1.06
-print(h)
 
 kernel = 2 * RBF(length_scale=3.0, length_scale_bounds=(1e-2, 1e2))
 kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma = 0.3)
@@ -297,4 +293,4 @@ print("unaware taturyan (gp): ")
 # W2 tatyuryan 
 cross_validation_taturyan(5,X, y, s , p = 2)
 
-# %%
+

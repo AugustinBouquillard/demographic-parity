@@ -1,19 +1,25 @@
+# Test different unaware/aware regressors 
+# and test differents base regresseurs/ mapping estimation
+# visualisation step by step
+
 #%%
 
 import numpy as np
-
 import ot 
 import matplotlib.pyplot as plt
-from sklearn.base import BaseEstimator, RegressorMixin, clone
 from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.neighbors import KNeighborsRegressor
-from sklearn.preprocessing import StandardScaler
 from scipy.stats import ks_2samp
 from sklearn.model_selection import train_test_split
 from OTUnawareFairRegressor import OTUnawareFairRegressor 
-from data_extraction_script import read_adult_dataset
 from matplotlib.collections import LineCollection
 from matplotlib.lines import Line2D
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF
+from sklearn.kernel_ridge import KernelRidge
+from sklearn.ensemble import RandomForestRegressor
+import sys
+import os
+from OTAwareFairRegressor import OTAwareFairRegressor
 # %%
 # Generate Data (X depends on S)
 def generate_linear_data(n , alpha_0, alpha_1, p = 0.3, x_scale = 1, noise_scale = 1, seed = 42):
@@ -52,14 +58,13 @@ x_scale = 1
 noise_scale = 0.3 
 p = 0.5
 X, Y, S = generate_linear_data(n = n, alpha_0 = alpha_0, alpha_1 = alpha_1, x_scale = x_scale, noise_scale = noise_scale, p = p)
-
-# train-test split
 X_train, X_test, Y_train, Y_test, S_train, S_test = train_test_split(X, Y, S, train_size = 0.6)
 
 
 # %% 
 # linearRegression
 # regression for the whole dataset/majority group/minority group
+
 std_reg = LinearRegression().fit(X_train, Y_train)
 y_std = std_reg.predict(X_test)
 
@@ -86,7 +91,6 @@ color_all = 'black'  # Color for the unfair regressor
 
 plt.figure(figsize=(10, 6))
 
-# Plot Data Points (Split by group for the legend)
 plt.scatter(X[S == 1], Y[S == 1], color=color_maj, alpha=0.5, s=30, 
             label='Data S=1 (Majority)')
 
@@ -94,7 +98,6 @@ plt.scatter(X[S == 2], Y[S == 2], color=color_min, alpha=0.5, s=30,
             label='Data S=2 (Minority)')
 
 # Plot Regression Lines 
-# Create X range for smooth lines
 x_range_min = X.min() - 0.2
 x_range_max = X.max() + 0.2
 X_plot = np.linspace(x_range_min, x_range_max, 1000).reshape(-1, 1)
@@ -115,7 +118,6 @@ plt.title(" Bias in Generated Data (linear regressor)", fontsize=14)
 plt.xlabel("Feature X")
 plt.ylabel("Target Y")
 
-# Legend
 plt.legend(frameon=True, loc='best')
 
 plt.tight_layout()
@@ -147,13 +149,12 @@ def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
         Path to save the figure (e.g., 'results/plot.png').
     """
     
-    # 1. Prepare Data
     x_flat = np.array(X).flatten()
     y_std_flat = np.array(y_unfair).flatten()
     y_fair_flat = np.array(y_fair).flatten()
     s_flat = np.array(s_attr).flatten()
 
-    # Setup Colors (Blue & Orange)
+
     cmap = plt.get_cmap('tab10')
     c1 = cmap(0) # Blue
     c2 = cmap(1) # Orange
@@ -185,16 +186,13 @@ def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
                 marker='*', edgecolors='white', linewidth=0.5, zorder=2)
 
     legend_elements = [
-        # Group Headers
         Line2D([0], [0], marker='o', color='w', label=f'Group S={s_val1}',
                markerfacecolor=c1, markersize=10),
         Line2D([0], [0], marker='o', color='w', label=f'Group S={s_val2}',
                markerfacecolor=c2, markersize=10),
         
-        # Spacer
         Line2D([0], [0], color='white', label=' '),
         
-        # Model Shapes
         Line2D([0], [0], marker='o', color='w', label='Unfair Prediction',
                markerfacecolor='gray', markersize=8, alpha=0.7),
         Line2D([0], [0], marker='*', color='w', label='Fair Prediction',
@@ -210,14 +208,12 @@ def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
     plt.xlabel("Feature (X)")
     plt.ylabel("Predicted Target (Y)")
 
-    # Clean look
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
     plt.grid(True, linestyle=':', alpha=0.5)
     plt.tight_layout()
 
     if save_path:
-        # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Figure saved to {save_path}")
@@ -229,8 +225,7 @@ plot_fairness_correction(
     X=X_test, 
     y_unfair=y_std, 
     y_fair=y_fair, 
-    s_attr=S_test, 
-    save_path="./results/fairness_correction_scatter.png"
+    s_attr=S_test
 )
 
 
@@ -274,7 +269,6 @@ def plot_ks_comparison(y_unfair, y_fair, s_attr, group_names=None, save_path=Non
     else:
         labels = group_names
 
-    # 2. Calculate KS Statistics
     # Unfair
     ks_std = ks_2samp(y_u[s == g1], y_u[s == g2])
     # Fair
@@ -283,15 +277,14 @@ def plot_ks_comparison(y_unfair, y_fair, s_attr, group_names=None, save_path=Non
     print(f"KS Distance (Unfair): {ks_std.statistic:.4f} (p={ks_std.pvalue:.4e})")
     print(f"KS Distance (Fair):   {ks_fair.statistic:.4f} (p={ks_fair.pvalue:.4e})")
 
-    # 3. Visualization
+    # Visualization
     fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
     
-    # Define colors (Blue/Orange)
     c1, c2 = 'tab:blue', 'tab:orange'
     bins = 20
     alpha = 0.6
 
-    # --- Plot 1: Unfair Distributions ---
+    # Unfair Distributions 
     axes[0].hist(y_u[s == g1], bins=bins, alpha=alpha, density=True, color=c1, label=labels[0])
     axes[0].hist(y_u[s == g2], bins=bins, alpha=alpha, density=True, color=c2, label=labels[1])
     
@@ -301,7 +294,7 @@ def plot_ks_comparison(y_unfair, y_fair, s_attr, group_names=None, save_path=Non
     axes[0].legend()
     axes[0].grid(axis='y', linestyle=':', alpha=0.5)
 
-    # --- Plot 2: Fair Distributions ---
+    # Fair Distributions
     axes[1].hist(y_f[s == g1], bins=bins, alpha=alpha, density=True, color=c1, label=labels[0])
     axes[1].hist(y_f[s == g2], bins=bins, alpha=alpha, density=True, color=c2, label=labels[1])
     
@@ -313,27 +306,21 @@ def plot_ks_comparison(y_unfair, y_fair, s_attr, group_names=None, save_path=Non
     plt.suptitle("Impact of Fairness Correction on Prediction Distributions", fontsize=16, y=1.02)
     plt.tight_layout()
 
-    # 4. Save and Show
     if save_path:
-        # Ensure directory exists
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, bbox_inches='tight')
         print(f"Plot saved to {save_path}")
         
     plt.show()
 
-# --- Example Usage ---
-# You can now call it cleanly:
 plot_ks_comparison(
     y_unfair=y_std, 
     y_fair=y_fair, 
     s_attr=S_test, 
-    group_names=['Majority (S=1)', 'Minority (S=2)'], # Optional custom labels
-    save_path="./results/generic_data_unaware_KS.png"
+    group_names=['Majority (S=1)', 'Minority (S=2)']
 )
 
 # %%
-
 
 def plot_fairness_shift(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42):
     """
@@ -361,13 +348,13 @@ def plot_fairness_shift(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42
     s = np.array(s_attr).flatten()
     d = np.array(delta).flatten()
     
-    # Sampling (Optional)
+
     if n_samples is not None and n_samples < len(y_u):
         np.random.seed(seed)
         indices = np.random.choice(len(y_u), n_samples, replace=False)
         y_u, y_f, s, d = y_u[indices], y_f[indices], s[indices], d[indices]
 
-    # Setup Colors (Blue & Orange)
+
     cmap = plt.get_cmap('tab10')
     c_blue = cmap(0)  
     c_orange = cmap(1)
@@ -436,15 +423,8 @@ plot_fairness_shift(
 # %%
 
 
-
-
-
-
-
 # Gaussian process regression 
 # regression for the whole dataset/majority group/minority group
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF
 
 kernel = 2 * RBF(length_scale=3.0, length_scale_bounds=(1e-2, 1e2))
 gp_reg = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9, alpha=noise_scale**2).fit(X_train, Y_train)
@@ -514,13 +494,9 @@ plt.show()
 
 # %%
 
-# Fair regresseur
-from sklearn.kernel_ridge import KernelRidge
+# Fair regresseur with random forest mapping estimation
 kernel_krr = KernelRidge(kernel='rbf', alpha=0.1, gamma=0.3)
-from sklearn.ensemble import RandomForestRegressor
-
 regr_rf = RandomForestRegressor(max_depth=4, random_state=0)
-
 ot_reg_gp = OTUnawareFairRegressor(base_regressor= gp_reg,kernel_krr=kernel_krr, n_neighbors= 5, random_forest=regr_rf)
 ot_reg_gp.fit(X_train, Y_train, S_train)
 
@@ -532,7 +508,6 @@ y_gp_fair_knn = ot_reg_gp.predict(X_test, prediction= "knn")
 
 # random forest regressor
 y_gp_fair_rf = ot_reg_gp.predict(X_test, prediction= "random_forest")
-
 
 
 def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None, method_name="knn"):
@@ -553,19 +528,15 @@ def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None, method
         Path to save the figure (e.g., 'results/plot.png').
     """
     
-    # 1. Prepare Data
     x_flat = np.array(X).flatten()
     y_std_flat = np.array(y_unfair).flatten()
     y_fair_flat = np.array(y_fair).flatten()
     s_flat = np.array(s_attr).flatten()
 
-    # Setup Colors (Blue & Orange)
     cmap = plt.get_cmap('tab10')
     c1 = cmap(0) # Blue
     c2 = cmap(1) # Orange
 
-    # Robustly map the two groups to colors
-    # We sort unique values so lower S (e.g., 1) gets Blue, higher S (e.g., 2) gets Orange
     unique_s = np.unique(s_flat)
     if len(unique_s) < 2:
         # Fallback if only 1 group exists
@@ -591,22 +562,18 @@ def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None, method
                 marker='*', edgecolors='white', linewidth=0.5, zorder=2)
 
     legend_elements = [
-        # Group Headers
         Line2D([0], [0], marker='o', color='w', label=f'Group S={s_val1}',
                markerfacecolor=c1, markersize=10),
         Line2D([0], [0], marker='o', color='w', label=f'Group S={s_val2}',
                markerfacecolor=c2, markersize=10),
         
-        # Spacer
         Line2D([0], [0], color='white', label=' '),
         
-        # Model Shapes
         Line2D([0], [0], marker='o', color='w', label='Unfair Prediction',
                markerfacecolor='gray', markersize=8, alpha=0.7),
         Line2D([0], [0], marker='*', color='w', label='Fair Prediction',
                markerfacecolor='gray', markersize=12, alpha=0.9),
         
-        # Correction Line
         Line2D([0], [0], color='gray', lw=1, label='Correction (Shift)'),
     ]
 
@@ -623,13 +590,13 @@ def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None, method
     plt.tight_layout()
 
     if save_path:
-        # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Figure saved to {save_path}")
 
     plt.show()
 
+# plot for different mapping estimation
 plot_fairness_correction(
     X=X_test, 
     y_unfair=y_gp, 
@@ -654,7 +621,8 @@ plot_fairness_correction(
     save_path="./results/fairness_correction_scatter_gp.png"
 )
 
-from OTAwareFairRegressor import OTAwareFairRegressor
+# visualize aware correction
+
 aware_model = OTAwareFairRegressor(gp_reg).fit(X_train, Y_train, S_train)
 y_fair_aware = aware_model.predict(X_test, S_test)
 y_fair_aware_derived = aware_model.predict(X_test)
@@ -675,8 +643,10 @@ plot_fairness_correction(
     save_path="./results/fairness_correction_scatter_gp.png"
 )
 
-import sys
-import os
+# %%
+# test Taturyan
+# ATTENTION: this may take some time
+
 current_dir = os.getcwd()
 #print(f"Notebook is running in: {current_dir}")
 
@@ -688,14 +658,12 @@ if folder_path not in sys.path:
     sys.path.insert(0, folder_path)
 from FairReg import FairReg
 
-# 1. Pre-fit the Base Regressor and the Proxy Classifier
+# Pre-fit the Base Regressor and the Proxy Classifier
 # FairReg requires these to be already fitted on the training data
-
-
 proxy_classifier = LogisticRegression()
 proxy_classifier.fit(X_train, S_train)
 
-# 2. Extract required parameters for FairReg
+# Extract required parameters for FairReg
 # B: Bound on the target variable (max absolute value of y)
 B_val = np.max(np.abs(Y_train)) 
 
@@ -712,7 +680,7 @@ eps_val = [0.00001 for _ in range(K_val)]
 # T: Number of iterations for the stochastic gradient descent
 T_val = 1000000
 
-# 3. Initialize the FairReg model
+# Initialize the FairReg model
 fair_reg_taturyan = FairReg(
     base_method=gp_reg,
     classifier=proxy_classifier,
@@ -723,11 +691,13 @@ fair_reg_taturyan = FairReg(
     T=T_val
 )
 
-# 4. Fit the fairness weights (w_est) using X_train
+# Fit the fairness weights (w_est) using X_train
 fair_reg_taturyan.fit(X_train)
 
-# 5. Predict on the test set
+# Predict on the test set
 y_pred_taturyan = fair_reg_taturyan.predict(X_test)
+
+# plot fairness correction plan
 plot_fairness_correction(
     X=X_test, 
     y_unfair=y_gp, 
@@ -740,8 +710,7 @@ plot_fairness_correction(
 # %% 
 # plot histogram
 
-
-def plot_ks_hist(y_unfair, y_fair, s_attr, group_names=None, save_path=None,regressor_name = 'knn'):
+def plot_ks_hist_with_name(y_unfair, y_fair, s_attr, group_names=None, save_path=None,regressor_name = 'knn'):
     """
     Calculates w1 et KS statistics and plots distribution histograms for fair predictions.
     
@@ -758,7 +727,6 @@ def plot_ks_hist(y_unfair, y_fair, s_attr, group_names=None, save_path=None,regr
         If provided, saves the figure to this path (e.g., './results/plot.png').
     """
     
-    # 1. Setup Data & Groups
 
     y_f = np.array(y_fair).flatten()
     s = np.array(s_attr).flatten()
@@ -776,17 +744,14 @@ def plot_ks_hist(y_unfair, y_fair, s_attr, group_names=None, save_path=None,regr
     else:
         labels = group_names
 
-    # 2. Calculate KS Statistics
     
     # Fair
     ks_fair = ks_2samp(y_f[s == g1], y_f[s == g2])
     w1 = ot.lp. wasserstein_1d( y_f[s == g1], y_f[s == g2], np.ones_like(y_f[s == g1])/len(y_f[s == g1]),np.ones_like(y_f[s == g2])/len(y_f[s == g2]))
     print(f"KS Distance (Fair):   {ks_fair.statistic:.4f} (p={ks_fair.pvalue:.4e})")
 
-    # 3. Visualization
     fig, axes = plt.subplots(1, 1, figsize=(6, 4))
-    
-    # Define colors (Blue/Orange)
+
     c1, c2 = 'tab:blue', 'tab:orange'
     bins = 20
     alpha = 0.6
@@ -801,16 +766,16 @@ def plot_ks_hist(y_unfair, y_fair, s_attr, group_names=None, save_path=None,regr
     axes.legend()
     axes.grid(axis='y', linestyle=':', alpha=0.5)
 
-    # 4. Save and Show
+
     if save_path:
-        # Ensure directory exists
+
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, bbox_inches='tight')
         print(f"Plot saved to {save_path}")
         
     plt.show()
 
-plot_ks_hist(
+plot_ks_hist_with_name(
     y_unfair=y_gp, 
     y_fair=y_gp_fair_rf, 
     s_attr=S_test, 
@@ -818,7 +783,7 @@ plot_ks_hist(
     save_path="./results/generic_data_unaware_KS_gp_rf.png",
     regressor_name= "random forest"
 )
-plot_ks_hist(
+plot_ks_hist_with_name(
     y_unfair=y_gp, 
     y_fair=y_gp_fair_krr, 
     s_attr=S_test, 
@@ -826,7 +791,7 @@ plot_ks_hist(
     save_path="./results/generic_data_unaware_KS_gp_rf.png",
     regressor_name= "krr"
 )
-plot_ks_hist(
+plot_ks_hist_with_name(
     y_unfair=y_gp, 
     y_fair=y_gp_fair_knn, 
     s_attr=S_test, 
@@ -837,6 +802,7 @@ plot_ks_hist(
 
 # %% 
 # plot unfair histogram 
+
 def plot_ks_hist_unfair(y_unfair, s_attr, group_names=None, save_path=None):
     """
     Calculates w1 et KS statistics and plots distribution histograms for fair predictions.
@@ -854,7 +820,6 @@ def plot_ks_hist_unfair(y_unfair, s_attr, group_names=None, save_path=None):
         If provided, saves the figure to this path (e.g., './results/plot.png').
     """
     
-    # 1. Setup Data & Groups
 
     y_u = np.array(y_unfair).flatten()
     s = np.array(s_attr).flatten()
@@ -872,17 +837,15 @@ def plot_ks_hist_unfair(y_unfair, s_attr, group_names=None, save_path=None):
     else:
         labels = group_names
 
-    # 2. Calculate KS Statistics
-    
+    # Calculate KS Statistics
     # unfair
     ks_unfair = ks_2samp(y_u[s == g1], y_u[s == g2])
     w1 = ot.lp. wasserstein_1d( y_u[s == g1], y_u[s == g2], np.ones_like(y_u[s == g1])/len(y_u[s == g1]),np.ones_like(y_u[s == g2])/len(y_u[s == g2]))
     print(f"KS Distance (Unfair):   {ks_unfair.statistic:.4f}")
 
-    # 3. Visualization
+    # Visualization
     fig, axes = plt.subplots(1, 1, figsize=(6, 4))
-    
-    # Define colors (Blue/Orange)
+
     c1, c2 = 'tab:blue', 'tab:orange'
     bins = 20
     alpha = 0.6
@@ -897,9 +860,9 @@ def plot_ks_hist_unfair(y_unfair, s_attr, group_names=None, save_path=None):
     axes.legend()
     axes.grid(axis='y', linestyle=':', alpha=0.5)
 
-    # 4. Save and Show
+
     if save_path:
-        # Ensure directory exists
+
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, bbox_inches='tight')
         print(f"Plot saved to {save_path}")
@@ -915,94 +878,7 @@ plot_ks_hist_unfair(
 )
 
 # %%
-
-# Calculate KS Distance 
-def plot_ks_comparison(y_unfair, y_fair, s_attr, group_names=None, save_path=None):
-    """
-    Calculates KS statistics and plots distribution histograms for unfair vs fair predictions.
-    
-    Parameters:
-    -----------
-    y_unfair : array-like
-        Predictions from the standard (unfair) model.
-    y_fair : array-like
-        Predictions from the fair (corrected) model.
-    s_attr : array-like
-        Sensitive attribute values (must contain exactly 2 unique groups).
-    group_names : list of str, optional
-        Custom names for the groups in the legend (e.g., ['Men', 'Women']).
-        If None, defaults to 'Group {val}'.
-    save_path : str, optional
-        If provided, saves the figure to this path (e.g., './results/plot.png').
-    """
-    
-    # 1. Setup Data & Groups
-    y_u = np.array(y_unfair).flatten()
-    y_f = np.array(y_fair).flatten()
-    s = np.array(s_attr).flatten()
-    
-    # Automatically detect the two groups (e.g., 0/1 or 1/2)
-    groups = np.unique(s)
-    if len(groups) != 2:
-        raise ValueError(f"Expected exactly 2 groups in s_attr, found {len(groups)}: {groups}")
-    
-    g1, g2 = groups[0], groups[1]
-    
-    # Default group names if not provided
-    if group_names is None:
-        labels = [f'Group {g1}', f'Group {g2}']
-    else:
-        labels = group_names
-
-    # 2. Calculate KS Statistics
-    # Unfair
-    ks_std = ks_2samp(y_u[s == g1], y_u[s == g2])
-    # Fair
-    ks_fair = ks_2samp(y_f[s == g1], y_f[s == g2])
-
-    print(f"KS Distance (Unfair): {ks_std.statistic:.4f} (p={ks_std.pvalue:.4e})")
-    print(f"KS Distance (Fair):   {ks_fair.statistic:.4f} (p={ks_fair.pvalue:.4e})")
-
-    # 3. Visualization
-    fig, axes = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
-    
-    # Define colors (Blue/Orange)
-    c1, c2 = 'tab:blue', 'tab:orange'
-    bins = 20
-    alpha = 0.6
-
-    # --- Plot 1: Unfair Distributions ---
-    axes[0].hist(y_u[s == g1], bins=bins, alpha=alpha, density=True, color=c1, label=labels[0])
-    axes[0].hist(y_u[s == g2], bins=bins, alpha=alpha, density=True, color=c2, label=labels[1])
-    
-    axes[0].set_title(f"Unfair Regressor\nKS Distance: {ks_std.statistic:.3f}", fontsize=14)
-    axes[0].set_xlabel("Predicted Y", fontsize=12)
-    axes[0].set_ylabel("Density", fontsize=12)
-    axes[0].legend()
-    axes[0].grid(axis='y', linestyle=':', alpha=0.5)
-
-    # --- Plot 2: Fair Distributions ---
-    axes[1].hist(y_f[s == g1], bins=bins, alpha=alpha, density=True, color=c1, label=labels[0])
-    axes[1].hist(y_f[s == g2], bins=bins, alpha=alpha, density=True, color=c2, label=labels[1])
-    
-    axes[1].set_title(f"Fair Regressor\nKS Distance: {ks_fair.statistic:.3f}", fontsize=14)
-    axes[1].set_xlabel("Predicted Y", fontsize=12)
-    axes[1].legend()
-    axes[1].grid(axis='y', linestyle=':', alpha=0.5)
-
-    plt.tight_layout()
-
-    # 4. Save and Show
-    if save_path:
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        plt.savefig(save_path, bbox_inches='tight')
-        print(f"Plot saved to {save_path}")
-        
-    plt.show()
-
-# --- Example Usage ---
-# You can now call it cleanly:
+# comparison for different mapping estimations
 plot_ks_comparison(
     y_unfair=y_gp, 
     y_fair=y_gp_fair_knn, 
@@ -1024,100 +900,6 @@ plot_ks_comparison(
     group_names=['Majority (S=1)', 'Minority (S=2)'], # Optional custom labels
     save_path="./results/generic_data_unaware_KS_gp_rf.png"
 )
-
-# %%
-
-
-def plot_fairness_shift(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42):
-    """
-    Visualizes the shift from unfair to fair predictions using a transport map style.
-    
-    Parameters:
-    -----------
-    y_unfair : array-like
-        The original (unfair) predicted values.
-    y_fair : array-like
-        The corrected (fair) predicted values.
-    s_attr : array-like
-        The sensitive attribute.
-    delta : array-like
-        The 'cost' or magnitude of correction (y-axis in the plot).
-    n_samples : int, optional
-        Number of points to visualize. If None, plots all points.
-    seed : int
-        Random seed for sampling consistency.
-    """
-    
-    # Standardize Inputs
-    y_u = np.array(y_unfair).flatten()
-    y_f = np.array(y_fair).flatten()
-    s = np.array(s_attr).flatten()
-    d = np.array(delta).flatten()
-    
-    # Sampling (Optional)
-    if n_samples is not None and n_samples < len(y_u):
-        np.random.seed(seed)
-        indices = np.random.choice(len(y_u), n_samples, replace=False)
-        y_u, y_f, s, d = y_u[indices], y_f[indices], s[indices], d[indices]
-
-    # Setup Colors (Blue & Orange)
-    cmap = plt.get_cmap('tab10')
-    c_blue = cmap(0)  
-    c_orange = cmap(1)
-    
-    # Map groups to colors automatically
-    unique_groups = np.unique(s)
-    group_colors = {unique_groups[0]: c_blue, unique_groups[1]: c_orange}
-    
-    # Create color list for the points
-    point_colors = [group_colors[val] for val in s]
-
-    # Plotting
-    plt.figure(figsize=(10, 6))
-    
-
-    # Start: (Unfair Prediction, Delta)
-    # End:   (Fair Prediction, 0)
-    start_points = np.column_stack((y_u, d))
-    end_points = np.column_stack((y_f, np.zeros_like(d)))
-    
-    segments = np.stack((start_points, end_points), axis=1)
-    lc = LineCollection(segments, colors='gray', alpha=0.2, linewidths=0.8, zorder=0)
-    plt.gca().add_collection(lc)
-    
-    # Unfair (Start) - Stars
-    plt.scatter(y_u, d, c=point_colors, s=50, marker='*', 
-                alpha=0.7, edgecolors='white', linewidth=0.5, zorder=1)
-    
-    # Fair (End) - Circles (Projected onto y=0)
-    plt.scatter(y_f, np.zeros_like(d), c=point_colors, s=50, marker='o', 
-                alpha=0.9, edgecolors='white', linewidth=0.5, zorder=2)
-
-    legend_elements = [
-        # Group Headers
-        Line2D([0], [0], marker='o', color='w', label=f'Group {unique_groups[0]}',
-               markerfacecolor=c_blue, markersize=10),
-        Line2D([0], [0], marker='o', color='w', label=f'Group {unique_groups[1]}',
-               markerfacecolor=c_orange, markersize=10),
-        Line2D([0], [0], color='white', label=' '), # Spacer
-        
-        # Shape Meanings
-        Line2D([0], [0], marker='*', color='w', label='Unfair Prediction',
-               markerfacecolor='gray', markersize=12),
-        Line2D([0], [0], marker='o', color='w', label='Fair Prediction',
-               markerfacecolor='gray', markersize=10),
-    ]
-
-    plt.axhline(0, color='black', linestyle='--', linewidth=1, alpha=0.3)
-    plt.xlabel("Predicted Value ($y$)")
-    plt.ylabel("delta ($\Delta(x)$)")
-    plt.title(f"Fairness Correction Map (Sampled {len(y_u)} points)")
-    plt.legend(handles=legend_elements, loc='upper right', frameon=True)
-    
-    plt.tight_layout()
-    plt.savefig("./results/generic_data_unaware_correction_line.png") 
-    plt.show()
-
 
 plot_fairness_shift(
     y_unfair = y_gp, 
