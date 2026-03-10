@@ -80,8 +80,6 @@ y_std_maj = std_reg_maj.predict(X_test_maj)
 std_reg_min = LinearRegression().fit(X_train_min, Y_train_min)
 y_std_min = std_reg_min.predict(X_test_min)
 
-
-# visualisation
 cmap = plt.get_cmap('tab10')
 color_maj = cmap(0)  # Color for S=1 (Orange)
 color_min = cmap(1)  # Color for S=2 (Green)
@@ -110,7 +108,7 @@ plt.scatter(X[S == 1], Y[S == 1], color=color_maj, alpha=0.5, s=30,
 plt.scatter(X[S == 2], Y[S == 2], color=color_min, alpha=0.5, s=30, 
             label='S=2')
 
-# Plot Regression Lines 
+#regression lines 
 x_range_min = X.min() - 0.2
 x_range_max = X.max() + 0.2
 X_plot = np.linspace(x_range_min, x_range_max, 1000).reshape(-1, 1)
@@ -158,7 +156,7 @@ color_maj = cmap(0)  # Color for S=1 (Orange)
 color_min = cmap(1)  # Color for S=2 (Green)
 color_all = 'black'  # Color for the unfair regressor
 
-# Plot Data Points (Split by group for the legend)
+#data points plot
 plt.scatter(X[S == 1], Y[S == 1], color=color_maj, alpha=0.5, s=30, 
             label='S=1')
 
@@ -245,31 +243,27 @@ def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
     lc = LineCollection(segments, colors='gray', alpha=0.3, linewidths=0.5, zorder=0)
     plt.gca().add_collection(lc)
 
-    # Unfair Prediction (Circles)
+    #unfair predictions (circles)
     plt.scatter(x_flat, y_std_flat, c=colors, alpha=0.6, s=30, 
                 marker='o', edgecolors='white', linewidth=0.5, zorder=1)
 
-    # Fair Prediction (Stars)
+    #fair predictions (stars)
     plt.scatter(x_flat, y_fair_flat, c=colors, alpha=0.9, s=80, 
                 marker='*', edgecolors='white', linewidth=0.5, zorder=2)
 
     legend_elements = [
-        # Group Headers
         Line2D([0], [0], marker='o', color='w', label=f'Group S={s_val1}',
                markerfacecolor=c1, markersize=10),
         Line2D([0], [0], marker='o', color='w', label=f'Group S={s_val2}',
                markerfacecolor=c2, markersize=10),
         
-        # Spacer
         Line2D([0], [0], color='white', label=' '),
         
-        # Model Shapes
         Line2D([0], [0], marker='o', color='w', label='Unfair Prediction',
                markerfacecolor='gray', markersize=8, alpha=0.7),
         Line2D([0], [0], marker='*', color='w', label='Fair Prediction',
                markerfacecolor='gray', markersize=12, alpha=0.9),
         
-        # Correction Line
         Line2D([0], [0], color='gray', lw=1, label='Correction (Shift)'),
     ]
 
@@ -285,7 +279,7 @@ def plot_fairness_correction(X, y_unfair, y_fair, s_attr, save_path=None):
     plt.tight_layout()
 
     if save_path:
-        # Create directory if it doesn't exist
+        #creating directory if it doesn't exist
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Figure saved to {save_path}")
@@ -340,23 +334,23 @@ def plot_ks_comparison(y_unfair, y_fair, s_attr, group_names=None, save_path=Non
     else:
         labels = group_names
 
-    # 2. Calculate KS Statistics
-    # Unfair
+    #KS statistics
+    #Unfair
     ks_std = ks_2samp(y_u[s == g1], y_u[s == g2])
-    # Fair
+    #Fair
     ks_fair = ks_2samp(y_f[s == g1], y_f[s == g2])
 
     print(f"KS Distance (Unfair): {ks_std.statistic:.4f} (p={ks_std.pvalue:.4e})")
     print(f"KS Distance (Fair):   {ks_fair.statistic:.4f} (p={ks_fair.pvalue:.4e})")
 
-    # Visualization
+    #Visualization
     fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
     
     c1, c2 = 'tab:blue', 'tab:orange'
     bins = 20
     alpha = 0.6
 
-    # Unfair Distributions 
+    #Unfair Distributions 
     axes[0].hist(y_u[s == g1], bins=bins, alpha=alpha, density=True, color=c1, label=labels[0])
     axes[0].hist(y_u[s == g2], bins=bins, alpha=alpha, density=True, color=c2, label=labels[1])
     
@@ -366,7 +360,7 @@ def plot_ks_comparison(y_unfair, y_fair, s_attr, group_names=None, save_path=Non
     axes[0].legend()
     axes[0].grid(axis='y', linestyle=':', alpha=0.5)
 
-    # Fair Distributions
+    #Fair Distributions
     axes[1].hist(y_f[s == g1], bins=bins, alpha=alpha, density=True, color=c1, label=labels[0])
     axes[1].hist(y_f[s == g2], bins=bins, alpha=alpha, density=True, color=c2, label=labels[1])
     
@@ -398,11 +392,9 @@ plot_ks_comparison(
 # %% 
 def plot_fairness_shift_with_hist(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42, save_path = None):
     """
-    Visualizes the shift from unfair to fair predictions using a transport map style,
-    alongside the initial conditional distributions and the final barycenter.
+    Visualizes the shift from unfair to fair predictions using a transport map style, alongside the initial conditional distributions and the final barycenter.
     """
     
-    # Standardize Inputs (Keep full arrays for accurate histograms)
     y_u_full = np.array(y_unfair).flatten()
     y_f_full = np.array(y_fair).flatten()
     s_full = np.array(s_attr).flatten()
@@ -410,7 +402,6 @@ def plot_fairness_shift_with_hist(y_unfair, y_fair, s_attr, delta, n_samples=Non
     
     unique_groups = np.unique(s_full)
     
-    # Sampling for the scatter plot only (Optional)
     if n_samples is not None and n_samples < len(y_u_full):
         np.random.seed(seed)
         indices = np.random.choice(len(y_u_full), n_samples, replace=False)
@@ -418,44 +409,39 @@ def plot_fairness_shift_with_hist(y_unfair, y_fair, s_attr, delta, n_samples=Non
     else:
         y_u, y_f, s, d = y_u_full, y_f_full, s_full, d_full
 
-    # Setup Colors (Blue & Orange)
     cmap = plt.get_cmap('tab10')
     c_blue = cmap(0)  
     c_orange = cmap(1)
     group_colors = {unique_groups[0]: c_blue, unique_groups[1]: c_orange}
     point_colors = [group_colors[val] for val in s]
 
-    # --- Setup Figure and GridSpec ---
     fig = plt.figure(figsize=(10, 8))
-    # Create two rows: top for histograms (height 1), bottom for scatter (height 2.5)
     gs = fig.add_gridspec(2, 1, height_ratios=[1, 2.5], hspace=0.05)
     
     ax_hist = fig.add_subplot(gs[0])
     ax_scatter = fig.add_subplot(gs[1], sharex=ax_hist)
 
-
-    # Distributions (Histograms)
     group_0_mask = s_full == unique_groups[0]
     group_1_mask = s_full == unique_groups[1]
     
-    # Initial conditional distributions (Unfair)
+    # initial conditional distributions (unfair)
     ax_hist.hist(y_u_full[group_0_mask], bins=40, density=True, alpha=0.4, 
                  color=c_blue, label=f'Initial | S={unique_groups[0]}')
     ax_hist.hist(y_u_full[group_1_mask], bins=40, density=True, alpha=0.4, 
                  color=c_orange, label=f'Initial | S={unique_groups[1]}')
     
-    # Barycenter distribution (Fair - target)
+    # barycenter distribution (fair - target)
     ax_hist.hist(y_f_full, bins=40, density=True, histtype='step', 
                  linewidth=2, color='black', linestyle='--', label='Barycenter (Fair)')
     
     ax_hist.set_ylabel("Density")
     ax_hist.legend(loc='upper right')
-    ax_hist.tick_params(labelbottom=False) # Hide x-ticks to blend with the plot below
+    ax_hist.tick_params(labelbottom=False)
     ax_hist.grid(axis='x', alpha=0.3)
     #plt.show()
 
 
-    # Transport Map (Scatter)
+    #transport map
 
     start_points = np.column_stack((y_u, d))
     end_points = np.column_stack((y_f, np.zeros_like(d)))
@@ -464,15 +450,14 @@ def plot_fairness_shift_with_hist(y_unfair, y_fair, s_attr, delta, n_samples=Non
     lc = LineCollection(segments, colors='gray', alpha=0.3, linewidths=0.8, zorder=0)
     ax_scatter.add_collection(lc)
     
-    # Unfair (Start) - Stars
+    #unfair stars
     ax_scatter.scatter(y_u, d, c=point_colors, s=60, marker='*', 
                        alpha=0.8, edgecolors='white', linewidth=0.5, zorder=1)
     
-    # Fair (End) - Circles (Projected onto y=0)
+    #fair circles
     ax_scatter.scatter(y_f, np.zeros_like(d), c=point_colors, s=50, marker='o', 
                        alpha=0.9, edgecolors='white', linewidth=0.5, zorder=2)
 
-    # Custom Legend for the bottom plot
     legend_elements = [
         Line2D([0], [0], marker='o', color='w', label=f'Group {unique_groups[0]}',
                markerfacecolor=c_blue, markersize=10),
@@ -541,8 +526,7 @@ def plot_fairness_plan(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42)
     
     ax_scatter = fig.add_subplot(gs[0])
 
-   
-    # Transport Map (Scatter)
+   #transport map
     start_points = np.column_stack((y_u, d))
     end_points = np.column_stack((y_f, np.zeros_like(d)))
     
@@ -550,11 +534,9 @@ def plot_fairness_plan(y_unfair, y_fair, s_attr, delta, n_samples=None, seed=42)
     lc = LineCollection(segments, colors='gray', alpha=0.3, linewidths=0.8, zorder=0)
     ax_scatter.add_collection(lc)
     
-    # Unfair (Start) - Stars
     ax_scatter.scatter(y_u, d, c=point_colors, s=60, marker='*', 
                        alpha=0.8, edgecolors='white', linewidth=0.5, zorder=1)
     
-    # Fair (End) - Circles (Projected onto y=0)
     ax_scatter.scatter(y_f, np.zeros_like(d), c=point_colors, s=50, marker='o', 
                        alpha=0.9, edgecolors='white', linewidth=0.5, zorder=2)
 
@@ -591,7 +573,7 @@ plot_fairness_plan(
     n_samples = 400
 )
 
-# Awareness as a special case of unawareness 
+#Awareness as a special case of unawareness 
 plot_fairness_plan(
     y_unfair = y_std, 
     y_fair = y_fair_aware, 
@@ -637,33 +619,32 @@ for alpha in alphas:
             X_exp, Y_exp, S_exp, train_size=0.8, random_state=run
         )
         
-        # Train Unfair Regressor
+        #training the unfair regressor
 
         std_reg_exp = LinearRegression().fit(X_train_exp, Y_train_exp)
         y_unfair_exp = std_reg_exp.predict(X_test_exp)
         
         
         try:
-            # Train OT Unaware Fair Regressor
-            # ot_reg_exp = OTUnawareFairRegressor(base_regressor = std_reg_exp)
+            #training OT Unaware Fair Regressor
+            #ot_reg_exp = OTUnawareFairRegressor(base_regressor = std_reg_exp)
             ot_reg_exp = OTUnawareFairRegressor()
             ot_reg_exp.fit(X_train_exp, Y_train_exp, S_train_exp)
             y_fair_exp = ot_reg_exp.predict(X_test_exp, prediction="knn")
             delta_exp = ot_reg_exp.delta_predict
             
         except AssertionError:
-            # If proxy collapses because alpha is too low (no separability)
+            #If proxy collapses because alpha is too low (no separability)
             if run == 0:
                 print(f"Alpha {alpha:.2f}: Proxy collapsed (no separability). Using unfair baseline.")
             y_fair_exp = y_unfair_exp.copy()
-            delta_exp = np.random.randn(len(y_fair_exp)) # Dummy delta
+            delta_exp = np.random.randn(len(y_fair_exp)) #Dummy delta
             
-        # Split condition based on delta
-   
+        #Split condition based on delta
         mask_pos = (S_test_exp == 1)
         mask_neg = (S_test_exp == 2)
         
-        # Ensure we don't calculate Wasserstein on empty arrays
+        #Ensure we don't calculate Wasserstein on empty arrays
         if sum(mask_pos) > 0 and sum(mask_neg) > 0:
             w1_unf = wasserstein_distance(y_unfair_exp[mask_pos], y_unfair_exp[mask_neg])
             w1_f = wasserstein_distance(y_fair_exp[mask_pos], y_fair_exp[mask_neg])
@@ -673,7 +654,7 @@ for alpha in alphas:
         else:
             w1_unf, w1_f = 0.0, 0.0
         
-        # Compute & Store Metrics for this run
+        #Compute & Store Metrics for this run
         temp_mse_unf.append(mean_squared_error(Y_test_exp, y_unfair_exp))
         temp_mse_fair.append(mean_squared_error(Y_test_exp, y_fair_exp))
         temp_w1_unf.append(w1_unf)
@@ -681,7 +662,7 @@ for alpha in alphas:
         temp_ks_unf.append(ks_unf)
         temp_ks_fair.append(ks_f)
         
-        # Save histogram data only for the first run of the requested alphas
+        #Save histogram data only for the first run of the requested alphas
         if run == 0 and any(np.isclose(alpha, a, atol=0.1) for a in alphas_to_plot) and len(histogram_data) < len(alphas_to_plot):
             histogram_data[alpha] = {
                 'y_u': y_unfair_exp, 'y_f': y_fair_exp, 
@@ -689,7 +670,6 @@ for alpha in alphas:
 
             }
             
-    # Calculate Mean and Standard Deviation for the current alpha
     mse_unfair_mean.append(np.mean(temp_mse_unf))
     mse_unfair_std.append(np.std(temp_mse_unf))
     
@@ -702,7 +682,6 @@ for alpha in alphas:
     w1_fair_mean.append(np.mean(temp_w1_fair))
     w1_fair_std.append(np.std(temp_w1_fair))
 
-# Convert to numpy arrays for easier plotting
 
 # %%
 alphas = np.array(alphas)
@@ -713,7 +692,7 @@ w1_fair_mean, w1_fair_std = np.array(w1_fair_mean), np.array(w1_fair_std)
 
 print("Experiment complete. Plotting results...")
 
-# Plot Metrics (MSE and Wasserstein Distance) with Confidence Intervals
+#Metrics (MSE and Wasserstein Distance) with Confidence Intervals
 fig, axes = plt.subplots(1, 2, figsize=(10, 3))
 
 # MSE Plot
@@ -747,13 +726,12 @@ plt.tight_layout()
 plt.show()
 
 
-# Plot Smooth Histograms for specific Alphas
+#Smooth histograms for specific alphas
 fig, axes = plt.subplots(len(histogram_data), 2, figsize=(10, 2 * len(histogram_data)), sharex=False, sharey=False)
 
 cmap = plt.get_cmap('tab10')
 c_pos, c_neg = cmap(0), cmap(1)
 
-# Ensure axes is 2D even if there's only 1 alpha to plot
 if len(histogram_data) == 1:
     axes = np.expand_dims(axes, axis=0)
 
@@ -767,7 +745,7 @@ for idx, (alpha, data) in enumerate(histogram_data.items()):
   
     
     bins = 50
-    # Plot Unfair Histograms
+    #plotting unfair Histograms
     ax_unf.hist(y_u[mask_pos], bins=bins, density=True, alpha=0.5, color=c_pos, label=r'S = 1')
     ax_unf.hist(y_u[mask_neg], bins=bins, density=True, alpha=0.5, color=c_neg, label=r'S = 2')
     ax_unf.set_title(r"Unfair Predictions ($\alpha_0 = %.1f$)" % alpha)
@@ -778,11 +756,11 @@ for idx, (alpha, data) in enumerate(histogram_data.items()):
     ax_unf.grid(axis='y', alpha=0.3)
     
   
-    # Plot Fair Histograms (Barycenter)
+    #plotting fair histograms (barycenter)
     ax_fair.hist(y_f[mask_pos], bins=bins, density=True, alpha=0.5, color=c_pos, label=r'Fair | S = 1')
     ax_fair.hist(y_f[mask_neg], bins=bins, density=True, alpha=0.5, color=c_neg, label=r'Fair | S = 2')
     
-    # Adding an outline for the overall barycenter distribution
+    #adding an outline for the overall barycenter distribution
     ax_fair.hist(y_f, bins=bins, density=True, histtype='step', linewidth=2, color='black', linestyle='--', label='Overall Barycenter')
     
     ax_fair.set_title(r"Fair Predictions ($\alpha_0 = %.1f$) | $W_1 = %.4f$ | KS = %.4f" % (alpha, data['w1_f'], data['ks_f']))
