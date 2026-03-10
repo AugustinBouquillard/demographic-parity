@@ -29,8 +29,8 @@ from FairReg import FairReg
 
 class MultiClassOTUnawareFairRegressor:
     """
-    Naive One-vs-Rest extension for the binary OTUnawareFairRegressor.
-    Trains K binary fair regressors (one for each class vs the rest) and averages predictions.
+    naive One-vs-Rest extension for the binary OTUnawareFairRegressor.
+    we train K binary fair regressors (one for each class vs the rest) and average predictions.
     """
     def __init__(self, base_regressor=None):
         self.base_regressor = base_regressor
@@ -114,9 +114,6 @@ def calculate_max_fairness_violation(preds, S_test_arr):
     return max_w1, max_ks
 
 def plot_multiclass_histograms(predictions_dict, S_test_arr, y_test_arr):
-    """
-    Plots the prediction distributions split by the 4-class sensitive attribute S.
-    """
     groups = np.unique(S_test_arr)
     #mapping based on the integers assigned in get_communities_data_multiclass
     group_names = {0: 'Black', 1: 'White', 2: 'Asian', 3: 'Hispanic'}
