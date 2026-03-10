@@ -195,11 +195,10 @@ def main():
     reg.fit(X_train_arr, y_train_arr)
     y_pred_base = reg.predict(X_test_arr).flatten()
     
-    print("Training Taturyan et al. (Minimax)...")
-    # Pass the already-fitted 'reg' model instead of an unfitted clone
-    fair_reg = FairReg(reg, clf_s, B=1, K=4, p=p, eps=[0.00001]*4, T=100000, keep_history=False)
-    fair_reg.fit(X_unlab_arr)
-    y_pred_tat = fair_reg.predict(X_test_arr).flatten()
+    print("Training Taturyan et al....")
+    fair_reg = FairReg(reg, clf_s, B=1, K=4, p=p, eps=[0.00001]*4, T=10000, keep_history=False)
+    fair_reg.fit(X_unlab)
+    y_pred_tat = fair_reg.predict(X_test).flatten()
     
     print("Training OT Aware Fair Regressor (Plug-in)...")
     ot_aware = OTAwareFairRegressor(base_estimator_model=clone(base_rf))
@@ -211,16 +210,15 @@ def main():
     ot_unaware_multi.fit(X_train_arr, y_train_arr, S_train_arr)
     y_pred_unaware = ot_unaware_multi.predict(X_test_arr, prediction="knn").flatten()
 
-    # --- Evaluation ---
     print("\n" + "=" * 90)
     print(f"{'Model':<35} | {'MSE':<10} | {'Max W1':<10} | {'Max KS'}")
     print("=" * 90)
     
     predictions = {
-        "Base Model (Unfair RF)": y_pred_base,
-        "Taturyan et al. (Minimax)": y_pred_tat,
-        "OT Aware (Estimated S Plug-in)": y_pred_aware,
-        "OT Unaware (OvR Heuristic)": y_pred_unaware
+        "Base model (unfair)": y_pred_base,
+        "Taturyan et al.": y_pred_tat,
+        "OT aware-derived": y_pred_aware,
+        "OT unaware(OvR naive extension)": y_pred_unaware
     }
     
     for name, preds in predictions.items():
