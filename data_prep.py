@@ -37,36 +37,28 @@ def get_communities_data(as_df=False):
     df = communities_and_crime.data.original
     df = df.fillna(0)
 
-    # 1. Drop non-predictive string columns that break the imputer
     cols_to_drop = ['communityname', 'state', 'county', 'community', 'fold']
     df = df.drop(columns=[c for c in cols_to_drop if c in df.columns], errors='ignore')
 
-    # 2. Extract sensitive attributes
     sens_attrs = ['racepctblack', 'racePctWhite', 'racePctAsian', 'racePctHisp']
     df['race'] = df[sens_attrs].idxmax(axis=1) #creating a new column based on ethnicity
     df = df.drop(columns=sens_attrs)
 
-    # 3. Extract target
     df = df.drop(df[df['ViolentCrimesPerPop']==0].index)
     y = df['ViolentCrimesPerPop'] #target
     df = df.drop('ViolentCrimesPerPop', axis=1)
 
-    # 4. Map sensitive attribute: S=1 for white, S=0 for non-white
+    #S=1 for white and S=0 for non-white
     mapping = {'racePctWhite':1, 'racepctblack':0, 'racePctAsian':0, 'racePctHisp':0} 
     S = df['race'].map(mapping) 
     df = df.drop('race', axis=1)
     
-    # 5. Handle missing values '?'
     X_crime = df.replace('?', np.nan)
-    
-    # Force pandas to recognize the columns as numeric floats
     X_crime = X_crime.apply(pd.to_numeric, errors='coerce')
-    
-    # Impute missing values with the mean
     imputer = SimpleImputer(strategy='mean')
     X_crime_clean = pd.DataFrame(imputer.fit_transform(X_crime), columns=X_crime.columns)
     
-    if as_df: #for comparing with agarwal
+    if as_df:
         return X_crime_clean, S, y
     else:
         return X_crime_clean.to_numpy(), S, y
