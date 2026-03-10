@@ -15,7 +15,6 @@ class OTAwareFairRegressor:
         proxy_estimator: also known as DELTA. An unfitted proxy estimator for estimating group-specific conditional expectations.
         sigma: jitter parameter for uniform noise to break ties.
         """
-        # Clone the model to ensure we are starting with a fresh, unfitted estimator
         self.base_estimator = clone(base_estimator_model)
         self.sigma = sigma
         self.p_hat = {}
@@ -33,35 +32,28 @@ class OTAwareFairRegressor:
         """
         self.proxy_estimator.fit(X_train, S_train)
 
-        # 1. Train the base estimator \hat{f} on labeled data 
+        #base estimator \hat{f} on labeled data 
         X_S_train_combined = np.column_stack((X_train, S_train))
         self.base_estimator.fit(X_S_train_combined, y_train)
 
-        # 2. Setup unlabeled data \mathcal{U} for calibration 
-        # Fallback to training data if no distinct unlabeled pool is provided
+        #unlabeled data \mathcal{U} for calibration 
         X_calib = X_train if X_unlabeled is None else X_unlabeled
         S_calib = S_train if S_unlabeled is None else S_unlabeled
 
         self.groups, counts = np.unique(S_calib, return_counts=True)
         n_total = len(S_calib)
         
-        # Estimate empirical frequencies \hat{p}_s 
+        #empirical frequencies \hat{p}_s 
         self.p_hat = {s: count / n_total for s, count in zip(self.groups, counts)}
         
-        # 3. Performing the group-wise calibration 
         for s in self.groups:
-            # Isolating unlabeled data for group s 
             X_s = X_calib[S_calib == s]
-            
-            # Splitting data into two equal parts
+            #splitting data into two equal parts
             half = len(X_s) // 2
             X_s_0, X_s_1 = X_s[:half], X_s[half:]
-            
-            # Re-attaching the sensitive attribute 's' so the base model can predict
             XS_0 = np.column_stack((X_s_0, np.full(len(X_s_0), s)))
             XS_1 = np.column_stack((X_s_1, np.full(len(X_s_1), s)))
-            
-            # Predicting and apply uniform jitter
+            #predicting and apply uniform jitter to break potential ties 
             pred_0 = self.base_estimator.predict(XS_0)
             pred_1 = self.base_estimator.predict(XS_1)
             
@@ -74,38 +66,34 @@ class OTAwareFairRegressor:
 
     def predict(self, X, S=None):
         predictions = np.zeros(len(X))
-        # If S is missing, use the proxy estimator to guess the classes
+        #if S is missing, we use the proxy estimator to guess the classes
         if S is None:
             S = self.proxy_estimator.predict(X)
 
-        # AWARENESS CONTEXT (Also handles Hard-Prediction Unawareness)
         for s in self.groups:
             mask = (S == s)
             if not np.any(mask): 
                 continue
             
-            # Predicting base values for all items in this group at once
+            #base values
             XS = np.column_stack((X[mask], S[mask]))
             f_val = self.base_estimator.predict(XS)
             f_val += np.random.uniform(-self.sigma, self.sigma, size=np.sum(mask))
             
-            # Vectorized searchsorted to find the rank
+            #searchsort to find the rank
             k_s = np.searchsorted(self.ar1[s], f_val)
             
-            # Convert the rank into a quantile (percentage between 0.0 and 1.0)
+            #converting the rank into a quantile
             q = k_s / len(self.ar1[s])
             
-            # Calculating Barycenter mapping
+            #computing one-d barycenter 
             g_hat = np.zeros(len(f_val))
             for s_prime in self.groups:
                 ar0_sp = self.ar0[s_prime]
                 n_sp = len(ar0_sp)
                 
-                # Create a theoretical grid of quantiles for the target group
                 target_q = np.linspace(0, 1, n_sp)
-                
-                # We evaluate the target values (ar0_sp) at the specific quantiles (q) with np.interp 
-                mapped_values = np.interp(q, target_q, ar0_sp)
+                mapped_values = np.interp(q, target_q, ar0_sp) #evaluating the target values (ar0_sp) at the specific quantiles (q) with np.interp
                 
                 g_hat += self.p_hat[s_prime] * mapped_values
 
