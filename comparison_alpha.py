@@ -191,7 +191,7 @@ for idx, alpha in enumerate(alpha_list ):
     results_stds_unfair[idx] = stds 
 
 
-# aware (plug in)
+#aware-derived (S plug in)
 print("aware derived (S plug-in)")
 for idx, alpha in enumerate(alpha_list ): 
     X, y, s = generate_linear_data(n = 2000, alpha_0 = alpha, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
@@ -217,7 +217,7 @@ fig, axes = plt.subplots(1, 3, figsize=(10, 3), sharex=True)
 for i, ax in enumerate(axes):
     indicator_name = indicators[i]
     
-        # Unfair Case
+    #unfair regressor
     ax.plot(alpha_list, results_means_unfair[:, i], 
             label='Unfair', color=colors['unfair'], lw=2, marker='s', markersize=4)
     ax.fill_between(alpha_list, 
@@ -225,7 +225,7 @@ for i, ax in enumerate(axes):
                     results_means_unfair[:, i] + results_stds_unfair[:, i], 
                     color=colors['unfair'], alpha=0.15)
     
-    # Aware Case
+    #aware Case
     ax.plot(alpha_list, results_means_aware[:, i], 
             label='Aware', color=colors['aware'], lw=2, marker='o', markersize=4)
     ax.fill_between(alpha_list, 
@@ -241,7 +241,7 @@ for i, ax in enumerate(axes):
                     results_means_aware_plug[:, i] + results_stds_aware_plug[:, i], 
                     color=colors['aware_derived'], alpha=0.15)
     
-    # Unaware Case
+    #unaware Case
     ax.plot(alpha_list, results_means[:, i], 
             label='Unaware', color=colors['unaware'], lw=2, marker='s', markersize=4)
     ax.fill_between(alpha_list, 
