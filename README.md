@@ -1,3 +1,21 @@
+##Code outline :
+
+In OTUnawareFairRegressor.py we implemented the Divol and Gaucher optimal unaware fair regressor 
+
+In OTAwareFairRegressor.py we implemented the awareness method of Chzhen et al. as well as an adapted version of it which works in an unawareness framework by plugging in instead of the true S value, its estimate delta.
+
+The unaware-fair-reg-third-method folder is adapted from the code of the paper by Taturyan et al. "Regression under demographic parity constraints via
+unlabeled post-processing" and contains the files necessary (in particular FairReg.py) to use their method, which relaxes the demographic parity constraint to use convex optimization.
+
+The visualizations in our slides were obtained with the following files : visualization_unawareness.py, visualization_routine.py, toy_example_visualization.ipynb, comparison_alpha.py for our generated data experiments as well as data_prep.py for preparation of "real world" datasets and the notebook real_world_data_visualization.ipynb for different model performance comparisons on the Communities and Crime and the Adult datasets.
+
+A naive extension of Divol and Gaucher's method to the case of a non-binary sensitive attribute and a comparison of all models on the Communities and Crime dataset with the four different communities as the sensitive attribute S is given in extension_to_non_binary_sensitive_attribute.py
+
+Some of the code is a bit duplicated between different files since we wanted to avoid conflicts when working at the same time on the git repository.
+
+
+##References and resources : 
+
 Base paper :
 
 Unawareness framework, regression (and classification) achieving demographic parity (Divol V., Gaucher S.):
