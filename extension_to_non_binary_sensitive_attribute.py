@@ -29,7 +29,7 @@ from FairReg import FairReg
 
 class MultiClassOTUnawareFairRegressor:
     """
-    Heuristic One-vs-Rest extension for the binary OTUnawareFairRegressor.
+    Naive One-vs-Rest extension for the binary OTUnawareFairRegressor.
     Trains K binary fair regressors (one for each class vs the rest) and averages predictions.
     """
     def __init__(self, base_regressor=None):
@@ -118,7 +118,7 @@ def plot_multiclass_histograms(predictions_dict, S_test_arr, y_test_arr):
     Plots the prediction distributions split by the 4-class sensitive attribute S.
     """
     groups = np.unique(S_test_arr)
-    #Mapping based on the integers assigned in get_communities_data_multiclass
+    #mapping based on the integers assigned in get_communities_data_multiclass
     group_names = {0: 'Black', 1: 'White', 2: 'Asian', 3: 'Hispanic'}
     
     fig, axes = plt.subplots(2, 2, figsize=(16, 12), sharex=True, sharey=True)
@@ -144,13 +144,12 @@ def plot_multiclass_histograms(predictions_dict, S_test_arr, y_test_arr):
         ax.legend(title="Majority Race")
         ax.grid(axis='y', linestyle=':', alpha=0.6)
         
-    plt.suptitle("Conditional Output Distributions by Majority Race (Communities & Crime)", fontsize=18, y=1.02)
+    plt.suptitle("conditional output distributions by majority community (Communities & Crime)", fontsize=18, y=1.02)
     plt.tight_layout()
     plt.show()
 
 
 def main():
-    print("Loading Communities & Crime data (Multi-class S)...")
     X, S, y = get_communities_data_multiclass()
     p = get_frequencies(S)
     
@@ -169,8 +168,6 @@ def main():
     
     y_train_arr, S_train_arr = np.array(y_train).flatten(), np.array(S_train).flatten()
     y_test_arr, S_test_arr = np.array(y_test).flatten(), np.array(S_test).flatten()
-    
-    print("\nTraining Multi-Class Sensitive Attribute Estimator (for Aware Plug-in)...")
 
     clf_s = LogisticRegression(solver='lbfgs', max_iter=2000)
     clf_s.fit(X_train_arr, S_train_arr)
