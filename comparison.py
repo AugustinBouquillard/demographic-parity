@@ -115,7 +115,7 @@ def generate_linear_data(n , alpha_0, alpha_1, p = 0.3, x_scale = 1, noise_scale
     :param seed: random seed
     """
     np.random.seed(seed)
-    S = np.random.binomial(1, p, n)+1 # Binary sensitive attributes
+    S = np.random.binomial(1, p, n)+1 # binary sensitive attributes
 
     X = np.random.normal(0, x_scale, n) - alpha_0 * S
     X = X.reshape(-1, 1)
@@ -127,7 +127,6 @@ def generate_linear_data(n , alpha_0, alpha_1, p = 0.3, x_scale = 1, noise_scale
 
 
 # %%
-
 
 # Cross-validation for different methods (mse, wass_1, ks)
 
@@ -166,11 +165,7 @@ evaluation_cross_validation(5, aware_derived_model , X, y, s, prediction = "plug
 
 
 current_dir = os.getcwd()
-#print(f"Notebook is running in: {current_dir}")
-
 folder_path = os.path.abspath(os.path.join(current_dir, 'unaware-fair-reg-3rd-method'))
-#print(f"Looking for module folder at: {folder_path}")
-#print(f"Does this folder exist? {os.path.exists(folder_path)}")
 
 if folder_path not in sys.path:
     sys.path.insert(0, folder_path)
@@ -205,21 +200,18 @@ def cross_validation_taturyan(k, X, y, s , p = 1):
 
         
         B_val = np.max(np.abs(y_train)) 
-
-        # K: Number of sensitive attribute groups
         unique_groups = np.unique(s_train)
         K_val = len(unique_groups)
 
-        # p: Frequencies of each sensitive group in the training data
+        # p: frequencies of each sensitive group in the training data
         p_val = [np.mean(s_train == s) for s in unique_groups]
 
-        # eps: Epsilon thresholds for demographic parity (tolerance for unfairness)
+        # eps: threshold for demographic parity (tolerance for unfairness)
         eps_val = [0.00001 for _ in range(K_val)] 
 
-        # T: Number of iterations for the stochastic gradient descent
+        # T: number of iterations for the stochastic gradient descent
         T_val = 1000000
 
-        # 3. Initialize the FairReg model
         fair_reg_taturyan = FairReg(
             base_method=gp_reg,
             classifier=proxy_classifier,
@@ -229,11 +221,9 @@ def cross_validation_taturyan(k, X, y, s , p = 1):
             eps=eps_val,
             T=T_val
         )
-
-        # 4. Fit the fairness weights (w_est) using X_train
+        
         fair_reg_taturyan.fit(X_train)
 
-        # 5. Predict on the test set
         y_pred_taturyan = fair_reg_taturyan.predict(X_test)
 
 
@@ -257,8 +247,7 @@ print("fair unaware taturyan: ")
 cross_validation_taturyan(5,X, y, s )
 
 # %%
-
-# crosse validation (mse, wass_2, ks)
+# cross validation (mse, wass_2, ks)
 
 noise_scale = 0.3
 X, y, s = generate_linear_data(n = 2000, alpha_0 = 2, alpha_1 = 1, p = 0.5, noise_scale= noise_scale)
