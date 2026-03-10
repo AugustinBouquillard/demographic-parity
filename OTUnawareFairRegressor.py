@@ -13,10 +13,8 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
     (find the barycenter and estimate the transport plan).
     """
     def __init__(self, base_regressor=None, base_classifier=None, n_neighbors=5, kernel_krr=KernelRidge(kernel='rbf', alpha=0.1, gamma=0.3), random_forest=RandomForestRegressor(max_depth=2)):
-        # FIXED: Explicitly use "is not None" to avoid calling __len__ on unfitted scikit-learn models
         self.base_regressor = base_regressor if base_regressor is not None else LinearRegression()
         
-        # Standard Logistic Regression (NO class_weight='balanced' to preserve true probabilities)
         self.base_classifier = base_classifier if base_classifier is not None else LogisticRegression(solver='liblinear')
         
         self.knn_plus_ = KNeighborsRegressor(n_neighbors=n_neighbors)
@@ -48,34 +46,32 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         y = np.array(y)
         s = np.array(s).flatten()
 
-        # 1. Dynamically identify the two sensitive groups
+        #dynamically identifying the two sensitive groups
         classes = np.sort(np.unique(s))
         if len(classes) != 2:
             raise ValueError(f"Expected exactly 2 sensitive groups, found {len(classes)}.")
         self.s1_, self.s2_ = classes[0], classes[1]
 
-        # 2. Fit Bayesian Models
+        #fitting Bayesian Models
         self.eta_model_ = clone(self.base_regressor).fit(X, y)
         eta_train = self.eta_model_.predict(X)
 
-        # 3. Calculate Empirical Frequencies
+        #empirical frequencies
         self.p_s1_ = np.clip(np.mean(s == self.s1_), a_min=1e-6, a_max=1-1e-6)
         self.p_s2_ = np.clip(np.mean(s == self.s2_), a_min=1e-6, a_max=1-1e-6)
         
         self.delta_model_ = clone(self.base_classifier).fit(X, s)
         
-        # Extract P(S=s1 | X). Index 0 aligns with classes_[0] which is self.s1_
+        #P(S=s1 | X)
         ps_pred = self.delta_model_.predict_proba(X)[:, 0]
         
-        # Calculate Delta
+        #Delta
         delta_vals = (ps_pred / self.p_s1_) - ((1 - ps_pred) / self.p_s2_)
 
-        # 4. Split Data by Delta
+        #splitting according to delta
         eps = 1e-9
         idx_plus = np.where(delta_vals > eps)[0]
         idx_minus = np.where(delta_vals < -eps)[0]
-        
-        # Fail-safe against total proxy collapse
         if len(idx_plus) == 0 or len(idx_minus) == 0:
             raise ValueError("Proxy collapsed: Features contain zero signal about the sensitive attribute. OT mapping cannot be applied.")
         
@@ -85,19 +81,19 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         n1 = len(h1)
         n2 = len(h2)
 
-        # 5. Cost Matrix for OT
+        #Cost Matrix for OT
         d1 = np.abs(delta_vals[idx_plus])
         d2 = np.abs(delta_vals[idx_minus])
         numer = (h1[:, None] - h2[None, :]) ** 2
         denom = (d1[:, None] + d2[None, :])
         M = numer / denom 
 
-        # 6. Solve Optimal Transport
+        #solving OT
         a = np.ones(n1) / n1
         b = np.ones(n2) / n2
         gamma = ot.emd(a, b, M)
 
-        # 7. Recover the fair barycenter
+        #fair barycenter
         inv_d1 = 1.0 / d1
         inv_d2 = 1.0 / d2
         num_matrix = (h1 * inv_d1)[:, None] + (h2 * inv_d2)[None, :]
@@ -107,7 +103,6 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         y_fair_plus = np.sum(gamma * Y_opt_pairs, axis=1) * n1
         y_fair_minus = np.sum(gamma * Y_opt_pairs, axis=0) * n2
         
-        # Construct full training arrays
         X_train_features = np.concatenate([
             np.column_stack((h1, delta_vals[idx_plus])),
             np.column_stack((h2, delta_vals[idx_minus]))
@@ -118,8 +113,6 @@ class OTUnawareFairRegressor(BaseEstimator, RegressorMixin):
         self.y_fair_minus = y_fair_minus.ravel()
         self.h_plus = h1.reshape(-1, 1)
         self.h_minus = h2.reshape(-1, 1)
-
-        # 8. Fit Mappings
        
         self.knn_plus_.fit(self.h_plus, self.y_fair_plus)
         self.knn_minus_.fit(self.h_minus, self.y_fair_minus)

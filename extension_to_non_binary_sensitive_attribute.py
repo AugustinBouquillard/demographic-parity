@@ -15,18 +15,18 @@ from scipy.stats import wasserstein_distance, ks_2samp
 from sklearn.base import clone
 from ucimlrepo import fetch_ucirepo 
 
-# Import Custom Models
+
 from OTAwareFairRegressor import OTAwareFairRegressor
 from OTUnawareFairRegressor import OTUnawareFairRegressor
 
-# Ensure FairReg can be imported from the unaware-fair-reg directory
+
 current_dir = os.getcwd()
 folder_path = os.path.abspath(os.path.join(current_dir, 'unaware-fair-reg-3rd-method'))
 if folder_path not in sys.path:
     sys.path.insert(0, folder_path)
 from FairReg import FairReg
 
-# --- One-vs-Rest Wrapper for the Unaware Method ---
+
 class MultiClassOTUnawareFairRegressor:
     """
     Heuristic One-vs-Rest extension for the binary OTUnawareFairRegressor.
@@ -41,10 +41,8 @@ class MultiClassOTUnawareFairRegressor:
         self.classes = np.unique(S)
         for c in self.classes:
             print(f"      Fitting Unaware OvR for Class {c}...")
-            # Create binary sensitive attribute: 1 if class c, 0 otherwise
             S_binary = np.where(S == c, 1, 0)
             
-            # Initialize and fit a standard binary OT Unaware Regressor with the passed base model
             model = OTUnawareFairRegressor(
                 base_regressor=clone(self.base_regressor) if self.base_regressor is not None else None
             )
@@ -53,16 +51,12 @@ class MultiClassOTUnawareFairRegressor:
         return self
 
     def predict(self, X, prediction="knn"):
-        # Gather predictions from all binary models
         preds = np.zeros((X.shape[0], len(self.classes)))
         for idx, c in enumerate(self.classes):
             preds[:, idx] = self.models[c].predict(X, prediction=prediction).flatten()
-        
-        # Average the predictions across all One-vs-Rest models
         return np.mean(preds, axis=1)
 
-
-# --- Data Preparation ---
+#data preparation utils
 def get_frequencies(S):
     p = []
     for p_s in sorted(S.value_counts(normalize=True).sort_index()):
@@ -99,7 +93,7 @@ def get_communities_data_multiclass(as_df=False):
     else:
         return X_crime_clean.to_numpy(), S, y
 
-# --- Evaluation Helpers ---
+#evauaion 
 def calculate_max_fairness_violation(preds, S_test_arr):
     groups = np.unique(S_test_arr)
     max_w1, max_ks = 0, 0
@@ -124,28 +118,25 @@ def plot_multiclass_histograms(predictions_dict, S_test_arr, y_test_arr):
     Plots the prediction distributions split by the 4-class sensitive attribute S.
     """
     groups = np.unique(S_test_arr)
-    # Mapping based on the integers assigned in get_communities_data_multiclass
+    #Mapping based on the integers assigned in get_communities_data_multiclass
     group_names = {0: 'Black', 1: 'White', 2: 'Asian', 3: 'Hispanic'}
     
-    # Create a 2x2 grid for the 4 models
     fig, axes = plt.subplots(2, 2, figsize=(16, 12), sharex=True, sharey=True)
     axes = axes.flatten()
     
     for idx, (name, preds) in enumerate(predictions_dict.items()):
         ax = axes[idx]
         
-        # Calculate metrics for the title
         mse = mean_squared_error(y_test_arr, preds)
         max_w1, max_ks = calculate_max_fairness_violation(preds, S_test_arr)
         
-        # Plot a histogram for each sensitive group
+        #one histogram for each sensitive group
         for g in groups:
             yp_g = preds[S_test_arr == g]
             if len(yp_g) > 0:
                 ax.hist(yp_g, bins=25, density=True, alpha=0.5, 
                         label=f'{group_names[g]}', edgecolor='white')
         
-        # Formatting
         ax.set_title(f"{name}\nMSE: {mse:.4f} | Max $W_1$: {max_w1:.4f} | Max KS: {max_ks:.4f}")
         ax.set_xlabel("Predicted Violent Crimes Per Pop")
         if idx % 2 == 0:
@@ -157,7 +148,7 @@ def plot_multiclass_histograms(predictions_dict, S_test_arr, y_test_arr):
     plt.tight_layout()
     plt.show()
 
-# --- Main Execution ---
+
 def main():
     print("Loading Communities & Crime data (Multi-class S)...")
     X, S, y = get_communities_data_multiclass()
@@ -171,7 +162,6 @@ def main():
         X_, S_, y_, test_size=TEST_SIZE/(1-TRAIN_SIZE), stratify=S_, random_state=42
     )
     
-    # Scale Features to fix LogisticRegression convergence warnings
     scaler = StandardScaler()
     X_train_arr = scaler.fit_transform(X_train)
     X_unlab_arr = scaler.transform(X_unlab)
@@ -181,15 +171,14 @@ def main():
     y_test_arr, S_test_arr = np.array(y_test).flatten(), np.array(S_test).flatten()
     
     print("\nTraining Multi-Class Sensitive Attribute Estimator (for Aware Plug-in)...")
-    # Removed deprecated multi_class argument; kept lbfgs with scaled data
+
     clf_s = LogisticRegression(solver='lbfgs', max_iter=2000)
     clf_s.fit(X_train_arr, S_train_arr)
     S_test_est = clf_s.predict(X_test_arr).flatten()
-    
-    # Define our stronger base regressor
+ 
     base_rf = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42)
 
-    # --- Models ---
+
     print("\nTraining Base Model (Unfair Random Forest)...")
     reg = clone(base_rf)
     reg.fit(X_train_arr, y_train_arr)
@@ -227,7 +216,6 @@ def main():
         print(f"{name:<35} | {mse:<10.4f} | {max_w1:<10.4f} | {max_ks:.4f}")
     print("=" * 90)
     
-    # --- Visualization ---
     print("\nPlotting multi-class prediction distributions...")
     plot_multiclass_histograms(predictions, S_test_arr, y_test_arr)
     
